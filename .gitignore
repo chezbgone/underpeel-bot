@@ -1,0 +1,6 @@
+.direnv
+
+**/__pycache__
+
+config.toml
+secrets.toml
