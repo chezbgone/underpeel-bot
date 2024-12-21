@@ -1,0 +1,19 @@
+services:
+  bot:
+    build: .
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    configs:
+      - source: up_config
+        target: /app/config.toml
+    secrets:
+      - source: up_secrets
+        target: /app/secrets.toml
+
+configs:
+  up_config:
+    file: ./config.toml
+
+secrets:
+  up_secrets:
+    file: ./secrets.toml
