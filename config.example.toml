@@ -1,1 +1,7 @@
+production_mode = false
+dynamodb_table = "discord-members"
 
+discord_server_id = 12345
+board_role_id = 12345
+mod_role_id = 12345
+dev_role_id = 12345

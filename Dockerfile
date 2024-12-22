@@ -25,6 +25,7 @@ COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 WORKDIR /app
 
 COPY cogs cogs
+COPY database database
 COPY bot.py .
 COPY config.py .
 

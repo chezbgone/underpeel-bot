@@ -1,0 +1,10 @@
+services:
+  bot:
+    depends_on:
+      - db
+  db:
+    image: "amazon/dynamodb-local"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - '8000:8000'
