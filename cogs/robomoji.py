@@ -39,3 +39,13 @@ class RobomojiCog(commands.GroupCog, group_name='robomoji'):
         res = toggle_emoji(member.id, emoji)
         LOG.info(f'{interaction.user} {res} robomoji {emoji} for {member}')
         await interaction.response.send_message(f'{res} robomoji {emoji} for {member}')
+
+    @toggle_emoji.error
+    async def toggle_emoji_error(self, interaction: Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.MissingAnyRole):
+            await interaction.response.send_message(
+                "You don't have the permission for this command.",
+                ephemeral=True,
+            )
+            return
+        raise error
