@@ -1,7 +1,18 @@
 from datetime import datetime, timedelta
 import logging
 
-from discord import HTTPException, Interaction, Member, Message, app_commands
+from discord import (
+    ForumChannel,
+    HTTPException,
+    Interaction,
+    Member,
+    Message,
+    TextChannel,
+    Thread,
+    StageChannel,
+    VoiceChannel,
+    app_commands,
+)
 from discord.ext import commands
 
 from config import CONFIG
@@ -19,8 +30,28 @@ class RobomojiCog(commands.GroupCog, group_name='robomoji'):
 
     @commands.Cog.listener()
     async def on_message(self, message: Message):
+        assert(message.guild is not None)
+        if message.guild.id != CONFIG['discord_server_id']:
+            return
+
+        channel = message.channel
+        if isinstance(channel, Thread):
+            channel = channel.parent
+            assert(channel is not None)
+
+        match channel:
+            case TextChannel() | StageChannel() | VoiceChannel() | ForumChannel():
+                if channel.id in CONFIG['non_robomoji_channels']:
+                    return
+                if channel.category_id in CONFIG['non_robomoji_categories']:
+                    return
+            case _:
+                LOG.info('tried to robomoji in bad {channel=}')
+
         author_id = message.author.id
         last_reacted, emojis = get_emoji_info(author_id)
+        if len(emojis) == 0:
+            return
         if (
             last_reacted is not None and
             last_reacted + ROBOMOJI_COOLDOWN > datetime.now()

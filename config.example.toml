@@ -5,3 +5,12 @@ discord_server_id = 12345
 board_role_id = 12345
 mod_role_id = 12345
 dev_role_id = 12345
+
+non_robomoji_categories = [
+  12345,
+  67890
+]
+non_robomoji_channels = [
+  12345,
+  67890
+]
