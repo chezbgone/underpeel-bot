@@ -2,6 +2,8 @@ services:
   bot:
     depends_on:
       - db
+    logging:
+      driver: local
   db:
     image: "amazon/dynamodb-local"
     extra_hosts:

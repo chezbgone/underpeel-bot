@@ -9,6 +9,11 @@ services:
     secrets:
       - source: up_secrets
         target: /app/secrets.toml
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: underpeel-bot-logs
+        awslogs-stream: underpeel-bot
 
 configs:
   up_config:

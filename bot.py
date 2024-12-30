@@ -9,11 +9,14 @@ from config import CONFIG, SECRETS
 from cogs.command_error_handler import CommandErrorHandler
 from cogs.robomoji import RobomojiCog
 
-intents = discord.Intents.all()
-
-discord.utils.setup_logging(level=logging.INFO)
+no_color_formatter = logging.Formatter('{levelname:<8} | {name}: {message}', style='{')
+if CONFIG['production_mode']:
+    discord.utils.setup_logging(formatter=no_color_formatter)
+else:
+    discord.utils.setup_logging()
 LOG = logging.getLogger(__name__)
 
+intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 guild = discord.Object(id=CONFIG['discord_server_id'])
 
