@@ -37,7 +37,7 @@ def _ensure_table_exists() -> bool:
             AttributeDefinitions=[
                 {
                     'AttributeName': 'id',
-                    'AttributeType': 'N',
+                    'AttributeType': 'S',
                 },
                 {
                     'AttributeName': 'sk',

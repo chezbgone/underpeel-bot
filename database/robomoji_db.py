@@ -12,18 +12,21 @@ LOG = logging.getLogger(__name__)
 """
 SCHEMA:
 =======
-userid, robomoji#update#{timestamp} : {
+user#{userid}, robomoji#update#{timestamp} : {
     staff_id: int | Literal['SYSTEM']
     emoji: int
     added : bool
     reason : str
 }
 
-userid, robomoji#info : {
+user#{userid}, robomoji#info : {
     emojis: list[binary]
     last_reacted: optional[datetime]
 }
 """
+
+def _make_id(user_id: int) -> str:
+    return f'user#{user_id}'
 
 def _make_sk(*layers: str) -> str:
     _sk_prefix = 'robomoji'
@@ -32,7 +35,7 @@ def _make_sk(*layers: str) -> str:
 
 def _make_key(user_id: int, *layers: str):
     return {
-        'id': user_id,
+        'id': _make_id(user_id),
         'sk': _make_sk(*layers)
     }
 
@@ -48,7 +51,7 @@ class RobomojiTransaction:
     reason: str
 
     @classmethod
-    def parse(cls, item) -> Self:
+    def from_item(cls, item) -> Self:
         assert('sk' in item)
         match = re.fullmatch(f'robomoji#{_update_prefix}#(?P<timestamp>.*)', item['sk'])
         assert(match is not None)
@@ -60,8 +63,10 @@ class RobomojiTransaction:
             staff_id = int(staff_id)
 
         assert('id' in item)
-        assert(type(item['id']) is Decimal)
-        chatter_id = int(item['id'])
+        match = re.fullmatch(fr'user#(?P<chatter_id>\d*)', item['id'])
+        assert(match is not None)
+        chatter_id = match['chatter_id']
+        LOG.info(chatter_id)
 
         assert('added' in item)
         assert(type(item['added']) is bool)
@@ -73,13 +78,13 @@ class RobomojiTransaction:
         assert('reason' in item)
         reason = item['reason']
 
-        return cls(timestamp, staff_id, chatter_id, action, emoji, reason)
+        return cls(timestamp, staff_id, int(chatter_id), action, emoji, reason)
 
 def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
     response = the_table().query(
         KeyConditionExpression='id = :id AND begins_with(sk, :sk_prefix)',
         ExpressionAttributeValues={
-            ':id': user_id,
+            ':id': _make_id(user_id),
             ':sk_prefix': _make_sk(_update_prefix),
         },
         ScanIndexForward=False,
@@ -88,7 +93,7 @@ def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
     changes = response.get('Items', []) # type: ignore
 
     return [
-        RobomojiTransaction.parse(item)
+        RobomojiTransaction.from_item(item=item)
         for item in changes
     ]
 
