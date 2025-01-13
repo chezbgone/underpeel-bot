@@ -1,11 +1,11 @@
-from decimal import Decimal
 import logging
 import re
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Self
+from decimal import Decimal
+from typing import Literal
 
 from database import the_table
+from models.robomoji import RobomojiTransaction
 
 LOG = logging.getLogger(__name__)
 
@@ -41,17 +41,8 @@ def _make_key(user_id: int, *layers: str):
 
 _update_prefix = 'update'
 
-@dataclass
-class RobomojiTransaction:
-    time: datetime
-    staff: int | Literal['SYSTEM']
-    chatter_id: int
-    action: Literal['added', 'removed']
-    emoji: str
-    reason: str
-
-    @classmethod
-    def from_item(cls, item) -> Self:
+def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
+    def make_robomoji_transaction(item):
         assert('sk' in item)
         match = re.fullmatch(f'robomoji#{_update_prefix}#(?P<timestamp>.*)', item['sk'])
         assert(match is not None)
@@ -78,9 +69,8 @@ class RobomojiTransaction:
         assert('reason' in item)
         reason = item['reason']
 
-        return cls(timestamp, staff_id, int(chatter_id), action, emoji, reason)
+        return RobomojiTransaction(timestamp, staff_id, int(chatter_id), action, emoji, reason)
 
-def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
     response = the_table().query(
         KeyConditionExpression='id = :id AND begins_with(sk, :sk_prefix)',
         ExpressionAttributeValues={
@@ -90,11 +80,9 @@ def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
         ScanIndexForward=False,
         Limit=limit,
     )
-    changes = response.get('Items', []) # type: ignore
-
     return [
-        RobomojiTransaction.from_item(item=item)
-        for item in changes
+        make_robomoji_transaction(item)
+        for item in response.get('Items', [])
     ]
 
 def get_emoji_info(user_id: int) -> tuple[datetime | None, list[str]]:

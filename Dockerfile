@@ -26,6 +26,7 @@ WORKDIR /app
 
 COPY cogs cogs
 COPY database database
+COPY models models
 COPY bot.py .
 COPY config.py .
 
