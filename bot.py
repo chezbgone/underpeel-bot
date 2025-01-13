@@ -5,9 +5,10 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from config import CONFIG, SECRETS
 from cogs.command_error_handler import CommandErrorHandler
 from cogs.robomoji import RobomojiCog
+from cogs.underpeel import Underpeel
+from config import CONFIG, SECRETS
 
 no_color_formatter = logging.Formatter('{levelname:<8} | {name}: {message}', style='{')
 if CONFIG['production_mode']:
@@ -23,9 +24,6 @@ guild = discord.Object(id=CONFIG['discord_server_id'])
 @bot.event
 async def on_ready():
     LOG.info(f'Logged in as {bot.user}')
-    await bot.add_cog(CommandErrorHandler(bot))
-    await bot.add_cog(RobomojiCog(bot))
-    LOG.info('done')
 
 @bot.tree.command(guild=guild)
 @app_commands.checks.has_any_role(
@@ -38,6 +36,9 @@ async def sync(interaction: Interaction):
     await interaction.response.send_message(f'synced {len(synced)} commands')
 
 async def main():
+    await bot.add_cog(CommandErrorHandler(bot))
+    await bot.add_cog(RobomojiCog(bot))
+
     await bot.start(SECRETS['DISCORD_TOKEN'])
 
 if __name__ == '__main__':

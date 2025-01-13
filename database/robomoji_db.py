@@ -102,8 +102,9 @@ def get_emoji_info(user_id: int) -> tuple[datetime | None, list[str]]:
         Key=_make_key(user_id, 'info'),
         ProjectionExpression='emojis, last_reacted'
     )
-    last_reacted_raw: str | None = response.get('Item', {}).get('last_reacted')  # type: ignore
-    emojis_raw: set[SupportsBytes] = response.get('Item', {}).get('emojis', set())  # type: ignore
+    item = response.get('Item', {})
+    last_reacted_raw: str | None = item.get('last_reacted')  # type: ignore
+    emojis_raw: set[SupportsBytes] = item.get('emojis', set())  # type: ignore
 
     last_reacted = None
     if last_reacted_raw is not None:
