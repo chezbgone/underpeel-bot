@@ -38,6 +38,7 @@ async def sync(interaction: Interaction):
 async def main():
     await bot.add_cog(CommandErrorHandler(bot))
     await bot.add_cog(RobomojiCog(bot))
+    bot.tree.add_command(Underpeel())
 
     await bot.start(SECRETS['DISCORD_TOKEN'])
 
