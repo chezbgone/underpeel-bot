@@ -75,6 +75,7 @@ async def staff_link(interaction: Interaction, player: Member, riot_id: Range[st
     await respond(
         f'Successfully linked {player.mention} to `{game_name}#{tag}`',
         allowed_mentions=AllowedMentions.none(),
+        ephemeral=True,
     )
 
 @app_commands.command(name='unlink')
@@ -85,6 +86,7 @@ async def staff_unlink(interaction: Interaction, player: Member):
     await interaction.response.send_message(
         f'Successfully unlinked Riot ID from {player.mention}.',
         allowed_mentions=AllowedMentions.none(),
+        ephemeral=True,
     )
 
 @app_commands.command()
