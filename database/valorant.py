@@ -48,3 +48,8 @@ def set_riot_id(user_id: int, game_name: str, tag: str):
             'tagline': tag,
         }
     )
+
+def clear_riot_id(user_id: int):
+    the_table().delete_item(
+        Key= _make_key(user_id),
+    )
