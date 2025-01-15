@@ -140,15 +140,3 @@ class RobomojiCog(commands.GroupCog, group_name='robomoji'):
             '\n'.join(response),
             allowed_mentions=AllowedMentions.none()
         )
-
-    @toggle_emoji.error
-    @list_emoji.error
-    @emoji_history.error
-    async def permissions_error(self, interaction: Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.MissingAnyRole):
-            await interaction.response.send_message(
-                "You don't have the permission for this command.",
-                ephemeral=True,
-            )
-            return
-        raise error

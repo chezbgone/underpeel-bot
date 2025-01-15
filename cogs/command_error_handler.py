@@ -1,15 +1,27 @@
 import logging
 
 import discord
+from discord import Interaction, app_commands
 from discord.ext import commands
 from discord.ext.commands import CommandError, Context
 
+from models.bot import Bot
+
 LOG = logging.getLogger(__name__)
+
+async def on_tree_error(interaction: Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingAnyRole):
+        await interaction.response.send_message(
+            "You don't have the permission for this command.",
+            ephemeral=True,
+        )
+        return
+    raise error
 
 # from https://gist.github.com/EvieePy/7822af90858ef65012ea500bcecf1612
 class CommandErrorHandler(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
+    def __init__(self, bot: Bot):
+        bot.tree.on_error = on_tree_error
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: Context, error: CommandError):
@@ -50,4 +62,3 @@ class CommandErrorHandler(commands.Cog):
 
         else:
             raise error
-
