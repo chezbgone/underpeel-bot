@@ -20,8 +20,8 @@ async def main():
 
     await bot.add_cog(CommandErrorHandler(bot))
     await bot.add_cog(RobomojiCog(bot))
-    bot.tree.add_command(Underpeel())
     bot.tree.add_command(mk_sync(bot))
+    bot.tree.add_command(Underpeel(bot))
 
     await bot.start(SECRETS['DISCORD_TOKEN'])
 

@@ -10,8 +10,7 @@ class Bot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(command_prefix='!', intents=intents)
-        self.http_session = aiohttp.ClientSession()
+        self.http_session: aiohttp.ClientSession = aiohttp.ClientSession()
 
     async def on_ready(self):
         LOG.info(f'Logged in as {self.user}')
-
