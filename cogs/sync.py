@@ -1,3 +1,5 @@
+import logging
+
 import discord
 from discord import (
     Interaction,
@@ -6,6 +8,8 @@ from discord import (
 
 from config import CONFIG
 from models.bot import Bot
+
+LOG = logging.getLogger(__name__)
 
 def mk_sync(bot: Bot):
     @app_commands.command()
@@ -18,6 +22,7 @@ def mk_sync(bot: Bot):
     async def sync(interaction: Interaction):
         guild = discord.Object(id=CONFIG['discord_server_id'])
         synced = await bot.tree.sync(guild=guild)
+        LOG.info(f'{synced=}')
         await interaction.response.send_message(
             f'Synced {len(synced)} commands',
             ephemeral=True,
