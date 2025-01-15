@@ -45,12 +45,20 @@ async def link(interaction: Interaction, riot_id: Range[str, 7]):
             return
 
     set_riot_id(interaction.user.id, game_name, tag)
-    await respond(f'Successfully linked to `{game_name}#{tag}`')
+    LOG.info(f'{interaction.user} ({interaction.user.id}) linked self to {riot_id}')
+    await respond(
+        f'Successfully linked to `{game_name}#{tag}`',
+        ephemeral=True,
+    )
 
 @app_commands.command()
 async def unlink(interaction: Interaction):
     clear_riot_id(interaction.user.id)
-    await interaction.response.send_message(f'Successfully unlinked Riot ID.')
+    LOG.info(f'{interaction.user} ({interaction.user.id}) unlinked their riot id')
+    await interaction.response.send_message(
+        f'Successfully unlinked Riot ID.',
+        ephemeral=True,
+    )
 
 @app_commands.command(name='link')
 @staff_check
@@ -63,6 +71,7 @@ async def staff_link(interaction: Interaction, player: Member, riot_id: Range[st
             await respond(error_message)
             return
     set_riot_id(player.id, game_name, tag)
+    LOG.info(f"{interaction.user} ({interaction.user.id}) unlinked {player} ({player.id}) to {riot_id}")
     await respond(
         f'Successfully linked {player.mention} to `{game_name}#{tag}`',
         allowed_mentions=AllowedMentions.none(),
@@ -72,6 +81,7 @@ async def staff_link(interaction: Interaction, player: Member, riot_id: Range[st
 @staff_check
 async def staff_unlink(interaction: Interaction, player: Member):
     clear_riot_id(player.id)
+    LOG.info(f"{interaction.user} ({interaction.user.id}) unlinked {player} ({player.id})'s riot id")
     await interaction.response.send_message(
         f'Successfully unlinked Riot ID from {player.mention}.',
         allowed_mentions=AllowedMentions.none(),
