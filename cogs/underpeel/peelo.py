@@ -137,12 +137,16 @@ async def eligibility(bot: Bot, player: Member) -> tuple[int | None, str]:
         elif (pstats := await player_stats_from_henrik(riot_id, bot.http_session)) is not None:
             eligible = pstats.eligibility()
         else:
-            eligible = NotEligible()
-        game_details = '-# ' + eligible.details()
+            eligible = None
         match eligible:
+            case None:
+                game_details = f'-# :warning: Info for {riot_id} not found.'
+                peelo = None
             case NotEligible():
+                game_details = '-# ' + eligible.details()
                 peelo = None
             case _:
+                game_details = '-# ' + eligible.details()
                 if eligible.peak is None:
                     peelo = None
                 else:
