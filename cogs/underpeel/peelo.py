@@ -27,58 +27,6 @@ staff_check = app_commands.checks.has_any_role(
     CONFIG['logistics_role_id'],
 )
 
-async def player_stats_from_tracker(riot_id: RiotId, http_session: ClientSession) -> PlayerStats | None:
-    def parse_act_info(act_json) -> ActInfo:
-        act_name = act_json['metadata']['name']
-        played = act_json['stats']['matchesPlayed']['value']
-        peak_name = act_json['stats']['peakRank']['metadata']['tierName']
-
-        peak = SimpleRank.try_from(peak_name)
-        if peak is None and peak_name in ['Immortal 1', 'Immortal 2', 'Immortal 3', 'Radiant']:
-            peak_value = act_json['stats']['peakRank']['value']
-            peak = ImmortalPlus(peak_name, peak_value)
-        return ActInfo(act_name, played, peak)
-
-    url = (
-        f'https://api.track'
-        'er.gg/api/v2/valorant/'
-        'standard/profile/riot/'
-        f'{riot_id.game_name}%23{riot_id.tag}/'
-        'segments/season-report'
-    )
-    params = { 'playlist': 'competitive' }
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.1',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
-    }
-    async with http_session.get(url, params=params, headers=headers) as response:
-        if response.status == 403:
-            return None
-        try:
-            res = await response.json()
-            seasons = [
-                'E9: A1',
-                'E9: A2',
-                'E9: A3',
-                'V25: A1',
-            ]
-            season_dict = {
-                d['metadata']['name']: parse_act_info(d)
-                for d in res['data']
-                if d['type'] == 'season-report'
-                if d['metadata']['name'] in seasons
-            }
-            return PlayerStats(*(
-                season_dict.get(season, ActInfo.empty(season))
-                for season in seasons
-            ))
-
-        except Exception as e:
-            LOG.warning('could not get stats from tracker', exc_info=e)
-            return None
-
 async def player_stats_from_henrik(riot_id: RiotId, http_session: ClientSession) -> PlayerStats | None:
     def parse_act_info(act_json) -> ActInfo | None:
         act_name = act_json['season']['short']
@@ -132,25 +80,20 @@ async def eligibility(bot: Bot, player: Member) -> tuple[int | None, str]:
         peelo = None
     else:
         header = f'{player.mention} ({riot_id.tracker()})'
-        if (pstats := await player_stats_from_tracker(riot_id, bot.http_session)) is not None:
-            eligible = pstats.eligibility()
-        elif (pstats := await player_stats_from_henrik(riot_id, bot.http_session)) is not None:
-            eligible = pstats.eligibility()
+        player_stats = await player_stats_from_henrik(riot_id, bot.http_session)
+        if player_stats is None:
+            game_details = f'-# :warning: Info for {riot_id} not found.'
+            peelo = None
         else:
-            eligible = None
-        match eligible:
-            case None:
-                game_details = f'-# :warning: Info for {riot_id} not found.'
-                peelo = None
-            case NotEligible():
-                game_details = '-# ' + eligible.details()
-                peelo = None
-            case _:
-                game_details = '-# ' + eligible.details()
-                if eligible.peak is None:
+            eligible = player_stats.eligibility()
+            game_details = '-# ' + eligible.details()
+            match eligible:
+                case NotEligible():
                     peelo = None
-                else:
+                case _ if eligible.peak is not None:
                     peelo = eligible.peak.peelo()
+                case _:
+                    peelo = None
 
     qualifying_roles = [r for r in player.roles if r.id in CONFIG['up_participation_roles']]
     match qualifying_roles:
