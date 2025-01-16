@@ -71,7 +71,7 @@ async def staff_link(interaction: Interaction, player: Member, riot_id: Range[st
             await respond(error_message)
             return
     set_riot_id(player.id, game_name, tag)
-    LOG.info(f"{interaction.user} ({interaction.user.id}) unlinked {player} ({player.id}) to {riot_id}")
+    LOG.info(f"{interaction.user} ({interaction.user.id}) linked {player} ({player.id}) to {riot_id}")
     await respond(
         f'Successfully linked {player.mention} to `{game_name}#{tag}`',
         allowed_mentions=AllowedMentions.none(),
