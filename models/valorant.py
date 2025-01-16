@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from typing import Literal, Self
+from urllib.parse import quote
 
 @dataclass(frozen=True)
 class RiotId:
@@ -15,49 +17,82 @@ class RiotId:
     def tracker(self, style=True) -> str:
         url_base = 'https://tracker.gg/valorant/profile/riot'
         if style:
-            return f'[{str(self)}]({url_base}/{self.game_name}%23{self.tagline})'
+            return f'[{str(self)}]({url_base}/{quote(self.game_name)}%23{self.tagline})'
         return f'{url_base}/{self.game_name}%23{self.tagline}'
 
+@dataclass(frozen=True)
+class SimpleRank:
+    tier: Literal[
+        'Iron',
+        'Bronze',
+        'Silver',
+        'Gold',
+        'Platinum',
+        'Diamond',
+        'Ascendant',
+    ]
+    division: Literal[1, 2, 3]
 
-@dataclass(order=True)
-class Rank:
-    id: int
-    name: str
+    @classmethod
+    def try_from(cls, rank: str) -> Self | None:
+        match rank.split():
+            case [
+                ('Iron' | 'Bronze' | 'Silver' | 'Gold' | 'Platinum' | 'Diamond' | 'Ascendant') as tier,
+                ('1' | '2' | '3') as division,
+            ]:
+                return cls(tier, int(division))  # type: ignore
+            case _:
+                return None
 
     def __str__(self) -> str:
-        return self.name
-    
+        return f'{self.tier} {self.division}'
+
     def peelo(self) -> int:
-        match self.id:
-            case 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11: # Iron, Silver, Gold
+        match self.tier:
+            case 'Iron' | 'Bronze' | 'Silver':
                 return 500
-            case 24 | 25 | 26 | 27: # Immortal+
-                return 10000000
-            case k if k in range(12, 24):
-                # 12 -> 900
-                # 13 -> 1000
-                return 100 * k - 300
-        raise ValueError(self)
+            case 'Gold':
+                return 800 + 100 * self.division
+            case 'Platinum':
+                return 1100 + 100 * self.division
+            case 'Diamond':
+                return 1400 + 100 * self.division
+            case 'Ascendant':
+                return 1700 + 100 * self.division
+
+@dataclass
+class ImmortalPlus:
+    name: str
+    rr: int | None
+
+    def __str__(self) -> str:
+        if self.rr is None:
+            return f'{self.name} Unknown RR'
+        return f'{self.name} {self.rr} RR'
+
+    def peelo(self) -> int | None:
+        if self.rr is None:
+            return None
+        return 2100 + 2 * self.rr
+
+type Rank = None | SimpleRank | ImmortalPlus
+
+def rank_sort_key(rank: Rank) -> int:
+    match rank:
+        case SimpleRank():
+            return rank.peelo()
+        case ImmortalPlus() as imm:
+            if (peelo := imm.peelo()) is None:
+                return 0
+            return peelo
+        case _:
+            return 0
 
 @dataclass
 class ActInfo:
     name: str
     games_played: int
-    peak_rank: Rank | None
-
-    @classmethod
-    def of(cls, season_json):
-        short_name = season_json['season']['short']
-        played = season_json['games']
-        peak_data = max(
-            season_json['act_wins'],
-            default=None,
-            key=lambda win: win['id'],
-        )
-        peak = None
-        if peak_data is not None:
-            peak = Rank(peak_data['id'], peak_data['name'])
-        return ActInfo(short_name, played, peak)
+    peak_rank: Rank
 
     @classmethod
     def empty(cls, season_name: str):
@@ -65,4 +100,3 @@ class ActInfo:
     
     def display(self) -> str:
         return f'played {self.games_played}, peak {self.peak_rank}'
-
