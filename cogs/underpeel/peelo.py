@@ -13,10 +13,13 @@ from config import CONFIG, SECRETS
 from database.valorant import get_riot_id
 from models.bot import Bot
 from models.peelo import (
+    ActInfo,
     NotEligible,
     PlayerStats,
+    peelo_of,
+    rank_from_name,
 )
-from models.valorant import ActInfo, ImmortalPlus, RiotId, SimpleRank
+from models.valorant import RiotId
 
 LOG = logging.getLogger(__name__)
 
@@ -38,10 +41,7 @@ async def player_stats_from_henrik(riot_id: RiotId, http_session: ClientSession)
         )
         if peak_data is None:
             return None
-        peak_name = peak_data['name']
-        peak = SimpleRank.try_from(peak_name)
-        if peak is None and peak_name in ['Immortal 1', 'Immortal 2', 'Immortal 3', 'Radiant']:
-            peak = ImmortalPlus(peak_name, None)
+        peak = rank_from_name(peak_data['name'])
         return ActInfo(act_name, played, peak)
 
     url = f'https://api.henrikdev.xyz/valorant/v3/mmr/na/pc/{riot_id.game_name}/{riot_id.tag}'
@@ -66,7 +66,7 @@ async def player_stats_from_henrik(riot_id: RiotId, http_session: ClientSession)
                 for season in seasons
             ))
         except Exception as e:
-            LOG.warning('could not get stats from henrikdev api', exc_info=e)
+            LOG.warning(f'could not get stats for {riot_id}', exc_info=e)
             return None
 
 async def eligibility(bot: Bot, player: Member) -> tuple[int | None, str]:
@@ -90,10 +90,8 @@ async def eligibility(bot: Bot, player: Member) -> tuple[int | None, str]:
             match eligible:
                 case NotEligible():
                     peelo = None
-                case _ if eligible.peak is not None:
-                    peelo = eligible.peak.peelo()
                 case _:
-                    peelo = None
+                    peelo = peelo_of(eligible.peak)
 
     qualifying_roles = [r for r in player.roles if r.id in CONFIG['up_participation_roles']]
     match qualifying_roles:

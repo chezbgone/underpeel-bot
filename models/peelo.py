@@ -1,6 +1,80 @@
 from dataclasses import dataclass
+from typing import final
 
-from models.valorant import ActInfo, ImmortalPlus, Rank, rank_sort_key
+from models.valorant import ImmortalPlus, SimpleRank
+
+@final
+@dataclass
+class UnknownRank:
+    def peelo(self):
+        return None
+
+Rank = SimpleRank | ImmortalPlus | UnknownRank
+
+def rank_from_name(rank_name: str) -> Rank:
+    if (rank := SimpleRank.try_from(rank_name)) is not None:
+        return rank
+    if (rank := ImmortalPlus.try_from(rank_name)) is not None:
+        return rank
+    return UnknownRank()
+
+
+def rank_sort_key(rank: Rank) -> int:
+    match rank:
+        case UnknownRank():
+            return 0
+        case SimpleRank(tier, division):
+            match tier:
+                case 'Iron':
+                    return 0 + division
+                case 'Silver':
+                    return 10 + division
+                case 'Bronze':
+                    return 20 + division
+                case 'Gold':
+                    return 30 + division
+                case 'Platinum':
+                    return 40 + division
+                case 'Diamond':
+                    return 50 + division
+                case 'Ascendant':
+                    return 60 + division
+        case ImmortalPlus(name):
+            match name:
+                case 'Immortal 1':
+                    return 100
+                case 'Immortal 2':
+                    return 200
+                case 'Immortal 3':
+                    return 300
+                case 'Radiant':
+                    return 400
+
+def peelo_of(rank: Rank) -> int | None:
+    match rank:
+        case SimpleRank('Iron' | 'Bronze' | 'Silver', _):
+            return 500
+        case SimpleRank('Gold', division):
+            return 800 + 100 * division
+        case SimpleRank('Platinum', division):
+            return 1100 + 100 * division
+        case SimpleRank('Diamond', division):
+            return 1400 + 100 * division
+        case SimpleRank('Ascendant', division):
+            return 1700 + 100 * division
+        case ImmortalPlus():
+            return None
+        case UnknownRank():
+            return None
+        case _:
+            assert(False)
+
+def peelo_description(rank: Rank):
+    match peelo_of(rank):
+        case None:
+            return '\n-# :warning: Need to calculate peelo manually.'
+        case peelo:
+            return f' ({peelo} peelo)'
 
 @dataclass
 class Episode9Eligibility:
@@ -14,15 +88,10 @@ class Episode9Eligibility:
         return self.a1 + self.a2 + self.a3
 
     def details(self):
-        match self.peak:
-            case None | ImmortalPlus(rr=None):
-                peelo_description = '\n-# :warning: Need to calculate peelo manually.'
-            case _:
-                peelo_description = f' ({self.peak.peelo()} peelo)'
         return (
             ':white_check_mark: '
             f'{self.a1} + {self.a2} + {self.a3} = {self.total_games} games in episode 9 '
-            f'with peak {self.peak}{peelo_description}'
+            f'with peak {self.peak}{peelo_description(self.peak)}'
         )
 
 @dataclass
@@ -31,15 +100,10 @@ class Episode10Eligibility:
     peak: Rank
 
     def details(self):
-        match self.peak:
-            case None | ImmortalPlus(rr=None):
-                peelo_description = '\n-# :warning: Need to calculate peelo manually.'
-            case _:
-                peelo_description = f' ({self.peak.peelo()} peelo)'
         return (
             ':white_check_mark: '
             f'{self.games_played} games in episode 10 act 1 '
-            f'with peak {self.peak}{peelo_description}'
+            f'with peak {self.peak}{peelo_description(self.peak)}'
         )
 
 @dataclass
@@ -48,6 +112,19 @@ class NotEligible:
         return f':x: Not enough games played.'
 
 StatsEligibility = Episode9Eligibility | Episode10Eligibility | NotEligible
+
+@dataclass
+class ActInfo:
+    name: str
+    games_played: int
+    peak_rank: Rank
+
+    @classmethod
+    def empty(cls, season_name: str):
+        return ActInfo(season_name, 0, UnknownRank())
+    
+    def display(self) -> str:
+        return f'played {self.games_played}, peak {self.peak_rank}'
 
 @dataclass
 class PlayerStats:
@@ -61,10 +138,11 @@ class PlayerStats:
         games = [act.games_played for act in acts]
         if sum(games) >= 75:
             a1, a2, a3 = games
-            peak = max((act.peak_rank for act in acts), key=rank_sort_key)
+            peaks = [act.peak_rank for act in acts if act.peak_rank is not None]
+            peak = max(peaks, default=UnknownRank(), key=rank_sort_key)
             return Episode9Eligibility(a1, a2, a3, peak)
         if self.e10a1.games_played >= 50:
-            # fails if player somehow lost all 50 games
+            # fails if player somehow lost all games
             assert(self.e10a1.peak_rank is not None)
             return Episode10Eligibility(self.e10a1.games_played, self.e10a1.peak_rank)
         return NotEligible()
