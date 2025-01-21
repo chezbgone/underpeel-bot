@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import cast
 
 from aiohttp import ClientSession
 from discord import (
@@ -16,10 +17,11 @@ from models.peelo import (
     ActInfo,
     NotEligible,
     PlayerStats,
+    Rank,
     peelo_of,
     rank_from_name,
 )
-from models.valorant import RiotId
+from models.valorant import ImmortalPlus, RiotId, SimpleRank
 
 LOG = logging.getLogger(__name__)
 
@@ -69,29 +71,29 @@ async def player_stats_from_henrik(riot_id: RiotId, http_session: ClientSession)
             LOG.warning(f'could not get stats for {riot_id}', exc_info=e)
             return None
 
-async def eligibility(bot: Bot, player: Member) -> tuple[int | None, str]:
+async def eligibility(bot: Bot, player: Member) -> tuple[Rank | None, str]:
     """
-    returns (peelo, checks)
+    returns (peak_rank, checks)
     """
     riot_id = get_riot_id(player.id)
     if riot_id is None:
         header = f'{player.mention}'
         game_details = '-# :warning: No Riot ID linked to user.'
-        peelo = None
+        peak_rank = None
     else:
         header = f'{player.mention} ({riot_id.tracker()})'
         player_stats = await player_stats_from_henrik(riot_id, bot.http_session)
         if player_stats is None:
             game_details = f'-# :warning: Info for {riot_id} not found.'
-            peelo = None
+            peak_rank = None
         else:
             eligible = player_stats.eligibility()
             game_details = '-# ' + eligible.details()
             match eligible:
                 case NotEligible():
-                    peelo = None
+                    peak_rank = None
                 case _:
-                    peelo = peelo_of(eligible.peak)
+                    peak_rank = eligible.peak
 
     qualifying_roles = [r for r in player.roles if r.id in CONFIG['up_participation_roles']]
     match qualifying_roles:
@@ -104,7 +106,7 @@ async def eligibility(bot: Bot, player: Member) -> tuple[int | None, str]:
             )
 
     return (
-        peelo,
+        peak_rank,
         '\n'.join((
             header,
             game_details,
@@ -141,12 +143,21 @@ def mk_check_team_eligibility(bot: Bot):
             eligibility(bot, p)
             for p in players
         ))
-        peelos, details = zip(*eligibilities)
-        all_details = '\n'.join(details)
-        if None not in peelos:
-            all_details += f'\n**Total peelo: {sum(peelos)}**'
+        peaks: tuple[Rank | None, ...]
+        details: tuple[str, ...]
+        peaks, details = zip(*eligibilities)
+
+        summary = []
+        if all(isinstance(p, SimpleRank) for p in peaks):
+            peelo = sum(peelo_of(p) for p in cast(list[SimpleRank], peaks))
+            summary.append(f'**Total peelo: {peelo}**')
+        if sum(isinstance(p, ImmortalPlus) for p in peaks) <= 2:
+            summary.append(f':white_check_mark: **Team has at most two Immortal+ players.**')
+        else:
+            summary.append(f':x: **Team has more than two Immortal+ players.**')
+
         await interaction.followup.send(
-            all_details,
+            '\n'.join((*details, *summary)),
             allowed_mentions=AllowedMentions.none(),
         )
     return check_team_eligibility

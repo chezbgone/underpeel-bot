@@ -50,31 +50,25 @@ def rank_sort_key(rank: Rank) -> int:
                 case 'Radiant':
                     return 400
 
-def peelo_of(rank: Rank) -> int | None:
-    match rank:
-        case SimpleRank('Iron' | 'Bronze' | 'Silver', _):
+def peelo_of(rank: SimpleRank) -> int:
+    match rank.tier:
+        case 'Iron' | 'Bronze' | 'Silver':
             return 500
-        case SimpleRank('Gold', division):
-            return 800 + 100 * division
-        case SimpleRank('Platinum', division):
-            return 1100 + 100 * division
-        case SimpleRank('Diamond', division):
-            return 1400 + 100 * division
-        case SimpleRank('Ascendant', division):
-            return 1700 + 100 * division
-        case ImmortalPlus():
-            return None
-        case UnknownRank():
-            return None
-        case _:
-            assert(False)
+        case 'Gold':
+            return 800 + 100 * rank.division
+        case 'Platinum':
+            return 1100 + 100 * rank.division
+        case 'Diamond':
+            return 1400 + 100 * rank.division
+        case 'Ascendant':
+            return 1700 + 100 * rank.division
 
 def peelo_description(rank: Rank):
-    match peelo_of(rank):
-        case None:
+    match rank:
+        case SimpleRank():
+            return f' ({peelo_of(rank)} peelo)'
+        case _:
             return '\n-# :warning: Need to calculate peelo manually.'
-        case peelo:
-            return f' ({peelo} peelo)'
 
 @dataclass
 class Episode9Eligibility:

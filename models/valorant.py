@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from urllib.parse import quote
 from typing import ClassVar, Literal, Self, final
 
 @dataclass(frozen=True)
@@ -15,7 +16,8 @@ class RiotId:
     
     def tracker(self, style=True) -> str:
         url_base = 'https://tracker.gg/valorant/profile/riot'
-        link = f'{url_base}/{self.game_name}%23{self.tagline}'
+        path = quote(f'{self.game_name}#{self.tagline}')
+        link = f'{url_base}/{path}'
         if style:
             return f'[{str(self)}]({link})'
         return link
