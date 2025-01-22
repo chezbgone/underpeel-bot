@@ -1,8 +1,11 @@
 import logging
 
 import boto3
+from boto3.dynamodb.types import TypeDeserializer
 
 from config import CONFIG
+
+LOG = logging.getLogger(__name__)
 
 _boto_config = {}
 _boto_config['region_name'] = 'us-east-1'
@@ -13,7 +16,14 @@ if not CONFIG['production_mode']:
     _boto_config['endpoint_url'] = 'http://db:8000'
 
 _table_confirmed_exists = False
-LOG = logging.getLogger(__name__)
+
+# replace Decimal usage with int/float
+# https://github.com/boto/boto3/issues/369#issuecomment-1712058254
+def _deserialize_number(number: str) -> int | float:
+    if '.' in number or 'e' in number:
+        return float(number)
+    return int(number)
+setattr(TypeDeserializer, '_deserialize_n', lambda _, number: _deserialize_number(number))
 
 def _table_exists() -> bool:
     global _table_confirmed_exists

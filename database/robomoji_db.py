@@ -1,7 +1,6 @@
 import logging
 import re
 from datetime import datetime
-from decimal import Decimal
 from typing import Literal
 
 from database import the_table
@@ -49,9 +48,7 @@ def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
         timestamp = datetime.fromisoformat(match['timestamp'])
 
         assert('staff_id' in item)
-        if (staff_id := item['staff_id']) != 'SYSTEM':
-            assert(type(staff_id) is Decimal)
-            staff_id = int(staff_id)
+        staff_id = item['staff_id']
 
         assert('id' in item)
         match = re.fullmatch(fr'user#(?P<chatter_id>\d*)', item['id'])
