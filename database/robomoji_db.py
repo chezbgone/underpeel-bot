@@ -49,12 +49,9 @@ def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
 
         assert('staff_id' in item)
         staff_id = item['staff_id']
-
-        assert('id' in item)
-        match = re.fullmatch(fr'user#(?P<chatter_id>\d*)', item['id'])
-        assert(match is not None)
-        chatter_id = match['chatter_id']
-        LOG.info(chatter_id)
+        if staff_id != 'SYSTEM':
+            assert(staff_id.isdecimal())
+            staff_id = int(staff_id)
 
         assert('added' in item)
         assert(type(item['added']) is bool)
@@ -66,7 +63,7 @@ def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
         assert('reason' in item)
         reason = item['reason']
 
-        return RobomojiTransaction(timestamp, staff_id, int(chatter_id), action, emoji, reason)
+        return RobomojiTransaction(timestamp, staff_id, user_id, action, emoji, reason)
 
     response = the_table().query(
         KeyConditionExpression='id = :id AND begins_with(sk, :sk_prefix)',
