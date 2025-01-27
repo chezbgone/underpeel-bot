@@ -1,28 +1,45 @@
 import logging
-import re
 from datetime import datetime
 from typing import Literal
 
-from database import the_table
-from models.robomoji import RobomojiTransaction
+from pydantic import BaseModel, Field, field_validator
+
+from database import GetItemResponse, QueryResponse, the_table
 
 LOG = logging.getLogger(__name__)
 
-"""
-SCHEMA:
-=======
-user#{userid}, robomoji#update#{timestamp} : {
-    staff_id: int | Literal['SYSTEM']
-    emoji: int
-    added : bool
-    reason : str
-}
+#####  SCHEMA  #####
 
-user#{userid}, robomoji#info : {
-    emojis: list[binary]
-    last_reacted: optional[datetime]
-}
-"""
+# user#{userid}, robomoji#update#{timestamp}
+class RobomojiTransaction(BaseModel):
+    time: datetime = Field(validation_alias='sk')
+    staff: int | Literal['SYSTEM'] = Field(validation_alias='staff_id')
+    chatter_id: int = Field(validation_alias='id')
+    action: Literal['added', 'removed'] = Field(validation_alias='added')
+    emoji: str
+    reason: str
+
+    @field_validator('chatter_id', mode='before')
+    @classmethod
+    def trim_id(cls, id: str):
+        return id.removeprefix('user#')
+
+    @field_validator('time', mode='before')
+    @classmethod
+    def trim_sk(cls, sk: str):
+        return sk.removeprefix('robomoji#update#')
+
+    @field_validator('action', mode='before')
+    @classmethod
+    def validate_added(cls, added: bool) -> Literal['added', 'removed']:
+        return 'added' if added else 'removed'
+
+# user#{userid}, robomoji#info
+class RobomojiInfo(BaseModel):
+    emojis: list[str]
+    last_reacted: datetime | None = Field(default=None)
+
+#####  UTILS  #####
 
 def _make_id(user_id: int) -> str:
     return f'user#{user_id}'
@@ -40,32 +57,10 @@ def _make_key(user_id: int, *layers: str):
 
 _update_prefix = 'update'
 
+#####  INTERACTIONS  #####
+
 def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
-    def make_robomoji_transaction(item):
-        assert('sk' in item)
-        match = re.fullmatch(f'robomoji#{_update_prefix}#(?P<timestamp>.*)', item['sk'])
-        assert(match is not None)
-        timestamp = datetime.fromisoformat(match['timestamp'])
-
-        assert('staff_id' in item)
-        staff_id = item['staff_id']
-        if staff_id != 'SYSTEM':
-            assert(staff_id.isdecimal())
-            staff_id = int(staff_id)
-
-        assert('added' in item)
-        assert(type(item['added']) is bool)
-        action = 'added' if item['added'] else 'removed'
-
-        assert('emoji' in item)
-        emoji = bytes(item['emoji']).decode()
-
-        assert('reason' in item)
-        reason = item['reason']
-
-        return RobomojiTransaction(timestamp, staff_id, user_id, action, emoji, reason)
-
-    response = the_table().query(
+    raw_response = the_table().query(
         KeyConditionExpression='id = :id AND begins_with(sk, :sk_prefix)',
         ExpressionAttributeValues={
             ':id': _make_id(user_id),
@@ -74,27 +69,16 @@ def get_emoji_changes(user_id: int, limit=15) -> list[RobomojiTransaction]:
         ScanIndexForward=False,
         Limit=limit,
     )
-    return [
-        make_robomoji_transaction(item)
-        for item in response.get('Items', [])
-    ]
+    response = QueryResponse[RobomojiTransaction].model_validate(raw_response)
+    return response.items
 
-def get_emoji_info(user_id: int) -> tuple[datetime | None, list[str]]:
-    response = the_table().get_item(
+def get_emoji_info(user_id: int) -> RobomojiInfo | None:
+    raw_response = the_table().get_item(
         Key=_make_key(user_id, 'info'),
         ProjectionExpression='emojis, last_reacted'
     )
-    item = response.get('Item', {})
-    last_reacted_raw: str | None = item.get('last_reacted')  # type: ignore
-    emojis_raw: set[SupportsBytes] = item.get('emojis', set())  # type: ignore
-
-    last_reacted = None
-    if last_reacted_raw is not None:
-        last_reacted = datetime.fromisoformat(last_reacted_raw)
-
-    emojis = [bytes(emoji).decode() for emoji in emojis_raw]
-
-    return last_reacted, emojis
+    response = GetItemResponse[RobomojiInfo].model_validate(raw_response)
+    return response.item
 
 def register_emoji_use(user_id: int):
     the_table().update_item(
@@ -111,7 +95,11 @@ def toggle_emoji(
     emoji: str,
     reason: str,
 ) -> Literal['added', 'removed']:
-    _, user_emojis = get_emoji_info(user_id)
+    if (emoji_info := get_emoji_info(user_id)) is None:
+        user_emojis = []
+    else:
+        user_emojis = emoji_info.emojis
+
     operation = 'removed' if emoji in user_emojis else 'added'
 
     the_table().put_item(

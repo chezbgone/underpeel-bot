@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, NotRequired, TypedDict, cast
+from typing import Literal, NotRequired, TypedDict
 
 from database import the_table
 from models.underpeel import Player, UnderpeelTeam

@@ -1,7 +1,9 @@
 import logging
+from typing import Generic, TypeVar
 
 import boto3
 from boto3.dynamodb.types import TypeDeserializer
+from pydantic import BaseModel, Field
 
 from config import CONFIG
 
@@ -24,6 +26,18 @@ def _deserialize_number(number: str) -> int | float:
         return float(number)
     return int(number)
 setattr(TypeDeserializer, '_deserialize_n', lambda _, number: _deserialize_number(number))
+
+# replace Binary usage with bytes
+setattr(TypeDeserializer, '_deserialize_b', lambda _, number: bytes(number))
+
+ItemT = TypeVar('ItemT')
+class QueryResponse(BaseModel, Generic[ItemT]):
+    items: list[ItemT] = Field(validation_alias='Items')
+    count: int = Field(validation_alias='Count')
+    scanned_count: int = Field(validation_alias='ScannedCount')
+
+class GetItemResponse(BaseModel, Generic[ItemT]):
+    item: ItemT | None = Field(validation_alias='Item', default=None)
 
 def _table_exists() -> bool:
     global _table_confirmed_exists

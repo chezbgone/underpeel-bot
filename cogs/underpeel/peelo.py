@@ -67,8 +67,8 @@ async def player_stats_from_henrik(riot_id: RiotId, http_session: ClientSession)
                 season_dict.get(season, ActInfo.empty(season))
                 for season in seasons
             ))
-        except Exception as e:
-            LOG.warning(f'could not get stats for {riot_id}', exc_info=e)
+        except Exception:
+            LOG.info(f'could not get valorant stats for {riot_id}')
             return None
 
 async def eligibility(bot: Bot, player: Member) -> tuple[Rank | None, str]:

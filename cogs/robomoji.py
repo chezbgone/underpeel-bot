@@ -55,17 +55,19 @@ class RobomojiCog(commands.GroupCog, group_name='robomoji'):
                 LOG.info('tried to robomoji in bad {channel=}')
 
         author_id = message.author.id
-        last_reacted, emojis = db.get_emoji_info(author_id)
-        if len(emojis) == 0:
+        emoji_info = db.get_emoji_info(author_id)
+        if emoji_info is None:
+            return
+        if len(emoji_info.emojis) == 0:
             return
         if (
-            last_reacted is not None and
-            last_reacted + ROBOMOJI_COOLDOWN > datetime.now()
+            emoji_info.last_reacted is not None and
+            emoji_info.last_reacted + ROBOMOJI_COOLDOWN > datetime.now()
         ):
             # too soon, don't add reactions
             return
         db.register_emoji_use(author_id)
-        for emoji in emojis:
+        for emoji in emoji_info.emojis:
             try:
                 await message.add_reaction(emoji)
             except HTTPException as e:
@@ -105,11 +107,11 @@ class RobomojiCog(commands.GroupCog, group_name='robomoji'):
         member='member to describe emojis for',
     )
     async def list_emoji(self, interaction: Interaction, member: Member):
-        _, emojis = db.get_emoji_info(member.id)
-        if len(emojis) == 0:
+        emoji_info = db.get_emoji_info(member.id)
+        if emoji_info is None or len(emoji_info.emojis) == 0:
             await interaction.response.send_message(f'{member.name} has no robomojis')
             return
-        await interaction.response.send_message(' '.join(emojis))
+        await interaction.response.send_message(' '.join(emoji_info.emojis))
 
     @app_commands.command(name='history')
     @management_check
