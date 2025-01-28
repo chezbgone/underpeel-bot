@@ -17,6 +17,7 @@ optional = true
 
 [tool.poetry.group.dev.dependencies]
 boto3-stubs = {extras = ["dynamodb"], version = "^1.35.56"}
+ruff = "^0.9.3"
 
 [build-system]
 requires = ["poetry-core"]

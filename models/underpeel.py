@@ -6,10 +6,10 @@ class Player:
     discord_id: int
     peelo: int
 
+
 @dataclass
 class UnderpeelTeam:
     name: str
     tricode: str
     coach: int | None
     players: set[Player]
-

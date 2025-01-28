@@ -3,5 +3,7 @@
 
 **/__pycache__
 
+scripts
+
 config.toml
 secrets.toml

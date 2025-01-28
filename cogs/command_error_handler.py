@@ -9,6 +9,7 @@ from models.bot import Bot
 
 LOG = logging.getLogger(__name__)
 
+
 async def on_tree_error(interaction: Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingAnyRole):
         await interaction.response.send_message(
@@ -17,6 +18,7 @@ async def on_tree_error(interaction: Interaction, error: app_commands.AppCommand
         )
         return
     raise error
+
 
 # from https://gist.github.com/EvieePy/7822af90858ef65012ea500bcecf1612
 class CommandErrorHandler(commands.Cog):
@@ -33,7 +35,7 @@ class CommandErrorHandler(commands.Cog):
         error: commands.CommandError
             The Exception raised.
         """
-        if hasattr(ctx.command, 'on_error'):
+        if hasattr(ctx.command, "on_error"):
             return
 
         cog = ctx.cog
@@ -41,24 +43,26 @@ class CommandErrorHandler(commands.Cog):
             if cog._get_overridden_method(cog.cog_command_error) is not None:
                 return
 
-        ignored = (commands.CommandNotFound, )
-        error = getattr(error, 'original', error)
+        ignored = (commands.CommandNotFound,)
+        error = getattr(error, "original", error)
         if isinstance(error, ignored):
             return
 
         elif isinstance(error, commands.DisabledCommand):
-            await ctx.send(f'{ctx.command} has been disabled.')
+            await ctx.send(f"{ctx.command} has been disabled.")
 
         elif isinstance(error, commands.NoPrivateMessage):
             try:
-                await ctx.author.send(f'{ctx.command} can not be used in Private Messages.')
+                await ctx.author.send(
+                    f"{ctx.command} can not be used in Private Messages."
+                )
             except discord.HTTPException:
                 pass
 
         elif isinstance(error, commands.BadArgument):
-            assert(ctx.command is not None)
-            if ctx.command.qualified_name == 'tag list':
-                await ctx.send('I could not find that member. Please try again.')
+            assert ctx.command is not None
+            if ctx.command.qualified_name == "tag list":
+                await ctx.send("I could not find that member. Please try again.")
 
         else:
             raise error

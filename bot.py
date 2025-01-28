@@ -10,10 +10,13 @@ from cogs.underpeel import Underpeel
 from config import CONFIG, SECRETS
 from models.bot import Bot
 
+
 async def main():
     bot = Bot()
-    no_color_formatter = logging.Formatter('{levelname:<8} | {name}: {message}', style='{')
-    if CONFIG['production_mode']:
+    no_color_formatter = logging.Formatter(
+        "{levelname:<8} | {name}: {message}", style="{"
+    )
+    if CONFIG["production_mode"]:
         discord.utils.setup_logging(formatter=no_color_formatter)
     else:
         discord.utils.setup_logging()
@@ -23,7 +26,8 @@ async def main():
     bot.tree.add_command(mk_sync(bot))
     bot.tree.add_command(Underpeel(bot))
 
-    await bot.start(SECRETS['DISCORD_TOKEN'])
+    await bot.start(SECRETS["DISCORD_TOKEN"])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     asyncio.run(main())
