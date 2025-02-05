@@ -1,5 +1,5 @@
 import logging
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 import boto3
 from boto3.dynamodb.types import TypeDeserializer
@@ -46,6 +46,12 @@ class QueryResponse(BaseModel, Generic[ItemT]):
 
 class GetItemResponse(BaseModel, Generic[ItemT]):
     item: ItemT | None = Field(validation_alias="Item", default=None)
+
+
+class UpdateItemResponse(BaseModel):
+    attributes: dict[str, Any] | None = Field(
+        validation_alias="Attributes", default=None
+    )
 
 
 def _table_exists() -> bool:
