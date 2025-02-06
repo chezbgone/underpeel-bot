@@ -7,6 +7,8 @@ mod_role_id = 12345
 dev_role_id = 12345
 logistics_role_id = 12345
 
+stream_chat_id = 12345
+
 non_robomoji_categories = [
   12345,
   67890,
