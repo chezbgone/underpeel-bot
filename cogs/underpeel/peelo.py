@@ -1,23 +1,28 @@
-import asyncio
 import logging
 from typing import cast
+from uuid import UUID
 
 from aiohttp import ClientSession
 from discord import (
     AllowedMentions,
     Interaction,
     Member,
+    Role,
     app_commands,
 )
+from pydantic import BaseModel, Field
 
 from config import CONFIG, SECRETS
 from database.valorant import get_riot_id
 from models.bot import Bot
 from models.peelo import (
     ActInfo,
+    Episode10Eligibility,
+    Episode9Eligibility,
     NotEligible,
     PlayerStats,
     Rank,
+    StatsEligibility,
     peelo_of,
     rank_from_name,
 )
@@ -33,92 +38,125 @@ staff_check = app_commands.checks.has_any_role(
 )
 
 
-async def player_stats_from_henrik(
+class ResponseActWin(BaseModel):
+    id: int
+    name: str
+
+
+class ResponseActMeta(BaseModel):
+    id: UUID
+    short: str
+
+
+class ResponseAct(BaseModel):
+    metadata: ResponseActMeta = Field(validation_alias="season")
+    wins: int
+    games: int
+    act_wins: list[ResponseActWin]
+
+
+class MmrResponseData(BaseModel):
+    seasonal: list[ResponseAct]
+
+
+async def ranked_matches_from_henrik(
     riot_id: RiotId, http_session: ClientSession
 ) -> PlayerStats | None:
-    def parse_act_info(act_json) -> ActInfo | None:
-        act_name = act_json["season"]["short"]
-        played = act_json["games"]
+    def parse_act_info(act: ResponseAct) -> ActInfo | None:
+        act_name = act.metadata.short
+        played = act.games
         peak_data = max(
-            act_json["act_wins"],
+            act.act_wins,
             default=None,
-            key=lambda win: win["id"],
+            key=lambda win: win.id,
         )
         if peak_data is None:
             return None
-        peak = rank_from_name(peak_data["name"])
+        peak = rank_from_name(peak_data.name)
         return ActInfo(act_name, played, peak)
 
     url = f"https://api.henrikdev.xyz/valorant/v3/mmr/na/pc/{riot_id.game_name}/{riot_id.tag}"
     headers = {"Authorization": SECRETS["HENRIKDEV_KEY"]}
     async with http_session.get(url, headers=headers) as response:
         try:
-            res = await response.json()
-            seasons = [
-                "e9a1",
-                "e9a2",
-                "e9a3",
-                "e10a1",
-            ]
-            season_dict: dict[str, ActInfo] = {
-                season["season"]["short"]: act_info
-                for season in res["data"]["seasonal"]
-                if season["season"]["short"] in seasons
-                if (act_info := parse_act_info(season)) is not None
+            raw_response = await response.json()
+            if raw_response["status"] != 200:
+                raise ValueError(raw_response)
+            response_data = MmrResponseData.model_validate(raw_response["data"])
+            acts = ["e9a1", "e9a2", "e9a3", "e10a1"]
+            act_dict: dict[str, ActInfo] = {
+                act.metadata.short: act_info
+                for act in response_data.seasonal
+                if (act_info := parse_act_info(act)) is not None
             }
             return PlayerStats(
-                *(season_dict.get(season, ActInfo.empty(season)) for season in seasons)
+                *(act_dict.get(act_name, ActInfo.empty(act_name)) for act_name in acts)
             )
         except Exception:
             LOG.info(f"could not get valorant stats for {riot_id}")
             return None
 
 
-async def eligibility(bot: Bot, player: Member) -> tuple[Rank | None, str]:
-    """
-    returns (peak_rank, checks)
-    """
-    riot_id = get_riot_id(player.id)
+type MatchesInfo = (
+    tuple[RiotId, None, None]
+    | tuple[RiotId, StatsEligibility, None]
+    | tuple[RiotId, StatsEligibility, Rank]
+)
+
+
+async def get_matches_info(http_session: ClientSession, riot_id: RiotId) -> MatchesInfo:
+    ranked_matches = await ranked_matches_from_henrik(riot_id, http_session)
+    if ranked_matches is None:
+        return (riot_id, None, None)
+    match ranked_matches.eligibility():
+        case NotEligible():
+            return (riot_id, NotEligible(), None)
+        case Episode9Eligibility() | Episode10Eligibility() as e:
+            return (riot_id, ranked_matches.eligibility(), e.peak)
+
+
+async def maybe_get_matches_info(
+    http_session: ClientSession, riot_id: RiotId | None
+) -> MatchesInfo | None:
     if riot_id is None:
-        header = f"{player.mention}"
-        game_details = "-# :warning: No Riot ID linked to user."
-        peak_rank = None
-    else:
-        header = f"{player.mention} ({riot_id.tracker()})"
-        player_stats = await player_stats_from_henrik(riot_id, bot.http_session)
-        if player_stats is None:
+        return None
+    return await get_matches_info(http_session, riot_id)
+
+
+type RoleInfo = list[Role]
+
+
+def get_role_info(player: Member) -> list[Role]:
+    return [r for r in player.roles if r.id in CONFIG["up_participation_roles"]]
+
+
+def display_eligibility_info(
+    player: Member, matches_info: MatchesInfo | None, role_info: RoleInfo
+) -> str:
+    match matches_info:
+        case None as riot_id:
+            game_details = "-# :warning: No Riot ID linked to user."
+        case (riot_id, None, _):
             game_details = f"-# :warning: Info for {riot_id} not found."
-            peak_rank = None
-        else:
-            eligible = player_stats.eligibility()
-            game_details = "-# " + eligible.details()
-            match eligible:
-                case NotEligible():
-                    peak_rank = None
-                case _:
-                    peak_rank = eligible.peak
+        case (riot_id, eligibility, _):
+            game_details = "-# " + eligibility.details()
 
-    qualifying_roles = [
-        r for r in player.roles if r.id in CONFIG["up_participation_roles"]
-    ]
-    match qualifying_roles:
-        case []:
-            r_details = "-# :x: Player does not have any qualifying role."
-        case roles:
-            r_details = (
-                f"-# :white_check_mark: Player has roles: "
-                f"{' '.join(role.mention for role in roles)}"
-            )
+    header = player.mention
+    if riot_id is not None:
+        header = f"{player.mention} ({riot_id.tracker()})"
 
-    return (
-        peak_rank,
-        "\n".join(
-            (
-                header,
-                game_details,
-                r_details,
-            )
-        ),
+    if not role_info:
+        role_details = "-# :x: Player does not have any qualifying role."
+    else:
+        role_mentions = " ".join(role.mention for role in role_info)
+        role_details = f"-# :white_check_mark: Player has roles: {role_mentions}"
+
+    return "\n".join(
+        (
+            header,
+            game_details,
+            role_details,
+        )
     )
 
 
@@ -127,12 +165,45 @@ def mk_check_eligibility(bot: Bot):
     @staff_check
     async def check_eligibility(interaction: Interaction, player: Member):
         await interaction.response.defer(ephemeral=True)
-        _, details = await eligibility(bot, player)
+        riot_id = get_riot_id(player.id)
+        matches_info = await maybe_get_matches_info(bot.http_session, riot_id)
+        role_info = get_role_info(player)
         await interaction.followup.send(
-            details, allowed_mentions=AllowedMentions.none()
+            display_eligibility_info(player, matches_info, role_info),
+            allowed_mentions=AllowedMentions.none(),
         )
 
     return check_eligibility
+
+
+def display_team_eligibility_info(
+    players: list[Member],
+    matches_infos: list[MatchesInfo | None],
+    role_infos: list[RoleInfo],
+) -> str:
+    argss = list(zip(players, matches_infos, role_infos, strict=True))
+    individual_eligibility_infos = [display_eligibility_info(*args) for args in argss]
+
+    def peak_of_info(info: MatchesInfo | None) -> Rank | None:
+        if info is None:
+            return None
+        _, _, peak = info
+        return peak
+
+    peaks = [peak_of_info(info) for info in matches_infos]
+    team_summary = []
+    if all(isinstance(peak, SimpleRank) for peak in peaks):
+        peaks = cast(list[SimpleRank], peaks)
+        total_peelo = sum(peelo_of(peak) for peak in peaks)
+        team_summary.append(f"**Total peelo: {total_peelo}**")
+    if sum(isinstance(peak, ImmortalPlus) for peak in peaks) <= 2:
+        team_summary.append(
+            ":white_check_mark: **Team has at most two Immortal+ players.**"
+        )
+    else:
+        team_summary.append(":x: **Team has more than two Immortal+ players.**")
+
+    return "\n".join((*individual_eligibility_infos, *team_summary))
 
 
 def mk_check_team_eligibility(bot: Bot):
@@ -148,24 +219,15 @@ def mk_check_team_eligibility(bot: Bot):
     ):
         await interaction.response.defer(ephemeral=True)
         players = [player1, player2, player3, player4, player5]
-        eligibilities = await asyncio.gather(*(eligibility(bot, p) for p in players))
-        peaks: tuple[Rank | None, ...]
-        details: tuple[str, ...]
-        peaks, details = zip(*eligibilities)
-
-        summary = []
-        if all(isinstance(p, SimpleRank) for p in peaks):
-            peelo = sum(peelo_of(p) for p in cast(list[SimpleRank], peaks))
-            summary.append(f"**Total peelo: {peelo}**")
-        if sum(isinstance(p, ImmortalPlus) for p in peaks) <= 2:
-            summary.append(
-                ":white_check_mark: **Team has at most two Immortal+ players.**"
-            )
-        else:
-            summary.append(":x: **Team has more than two Immortal+ players.**")
+        maybe_riot_ids = [get_riot_id(p.id) for p in players]
+        matches_infos = [
+            await maybe_get_matches_info(bot.http_session, riot_id)
+            for riot_id in maybe_riot_ids
+        ]
+        role_infos = [get_role_info(p) for p in players]
 
         await interaction.followup.send(
-            "\n".join((*details, *summary)),
+            display_team_eligibility_info(players, matches_infos, role_infos),
             allowed_mentions=AllowedMentions.none(),
         )
 
