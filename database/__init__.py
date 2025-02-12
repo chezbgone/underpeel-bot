@@ -83,6 +83,10 @@ def _ensure_table_exists() -> bool:
                     "AttributeName": "sk",
                     "AttributeType": "S",
                 },
+                {
+                    "AttributeName": "message_id",
+                    "AttributeType": "N",
+                },
             ],
             KeySchema=[
                 {
@@ -93,6 +97,25 @@ def _ensure_table_exists() -> bool:
                     "AttributeName": "sk",
                     "KeyType": "RANGE",
                 },
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    "IndexName": "prediction_message_status_index",
+                    "KeySchema": [
+                        {
+                            "AttributeName": "message_id",
+                            "KeyType": "HASH",
+                        },
+                        {
+                            "AttributeName": "id",
+                            "KeyType": "RANGE",
+                        },
+                    ],
+                    "Projection": {
+                        "ProjectionType": "INCLUDE",
+                        "NonKeyAttributes": ["prediction_id", "status"],
+                    },
+                }
             ],
             BillingMode="PAY_PER_REQUEST",
             DeletionProtectionEnabled=True,
