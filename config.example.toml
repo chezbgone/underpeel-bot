@@ -1,5 +1,5 @@
 production_mode = false
-dynamodb_table = "discord-members"
+dynamodb_table = "underpeel"
 
 discord_server_id = 12345
 board_role_id = 12345

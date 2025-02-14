@@ -18,8 +18,8 @@ management_check = app_commands.checks.has_any_role(
     CONFIG["dev_role_id"],
 )
 
-ACCRUAL_COOLDOWN = timedelta(minutes=15)
-ACCUMULATION_DELAY = timedelta(minutes=15)
+ACCRUAL_COOLDOWN = timedelta(minutes=10)
+ACCUMULATION_DELAY = timedelta(minutes=10)
 ACCRUAL_CURRENCY_AMOUNT = 1
 STREAM_CHAT_MULTIPLIER = 10
 
@@ -102,6 +102,9 @@ class CurrencyCog(commands.GroupCog, group_name="currency"):
         self.cooldowns = CurrencyCooldownMap()
         self.clear_cooldown_cache.start()
 
+        assert self.app_command is not None
+        self.app_command.add_command(CurrencyStaff())
+
     async def cog_unload(self):
         self.clear_cooldown_cache.cancel()
 
@@ -126,11 +129,24 @@ class CurrencyCog(commands.GroupCog, group_name="currency"):
         if self.cooldowns.try_use_normal(message.author):
             db.add_to_user(message.author.id, ACCRUAL_CURRENCY_AMOUNT)
 
+    @app_commands.command(name="balance")
+    async def check_balance(self, interaction: Interaction):
+        points = db.get_user_points(interaction.user.id)
+        point_plural = "point" if points == 1 else "points"
+        await interaction.response.send_message(
+            f"You have {points} {point_plural}.",
+            ephemeral=True,
+        )
+
     @tasks.loop(hours=1)
     async def clear_cooldown_cache(self):
         self.cooldowns._clean_cache()
 
-    @app_commands.command(name="check_balance")
+
+@app_commands.guilds(CONFIG["discord_server_id"])
+class CurrencyStaff(app_commands.Group, name="staff"):
+    @app_commands.command(name="balance")
+    @management_check
     async def check_balance(self, interaction: Interaction, member: Member):
         points = db.get_user_points(member.id)
         point_plural = "point" if points == 1 else "points"
@@ -146,6 +162,9 @@ class CurrencyCog(commands.GroupCog, group_name="currency"):
         self, interaction: Interaction, member: Member, amount: int
     ):
         new_amount = db.add_to_user(member.id, amount)
+        LOG.info(
+            f"{interaction.user} ({interaction.user.id}) gave {member} ({member.id}) {amount} currency"
+        )
         await interaction.response.send_message(
             f"Added {amount} to {member.mention}'s balance. They now have {new_amount}.",
             allowed_mentions=AllowedMentions.none(),
