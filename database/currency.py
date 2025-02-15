@@ -1,51 +1,36 @@
-from pydantic import BaseModel
+import logging
 
-from database import GetItemResponse, UpdateItemResponse, the_table
+from sqlalchemy import insert, update
+from database import make_session, CurrencyInfo
 
-#####  SCHEMA  #####
-
-
-# user#{userid}, currency
-class CurrencyInfo(BaseModel):
-    amount: int
-
-
-#####  UTILS  #####
-
-
-def _make_key(user_id: int):
-    return {"id": f"user#{user_id}", "sk": "currency"}
-
-
-#####  INTERACTIONS  #####
+LOG = logging.getLogger(__name__)
 
 
 def get_user_points(id: int) -> int:
     """
     Returns the amount of currency in chatter `id`'s wallet.
     """
-    raw_response = the_table().get_item(
-        Key=_make_key(id),
-        ProjectionExpression="amount",
-    )
-    response = GetItemResponse[CurrencyInfo].model_validate(raw_response)
-    if response.item is None:
-        return 0
-    return response.item.amount
+    with make_session() as session:
+        if (info := session.get(CurrencyInfo, id)) is None:
+            return 0
+        return info.amount
 
 
-def add_to_user(id: int, amount: int) -> int:
+def add_points_to_user(id: int, amount: int) -> int:
     """
     Add `amount` currency to chatter `id`'s wallet.
     Returns the new amount the user has.
     """
-    raw_response = the_table().update_item(
-        Key=_make_key(id),
-        UpdateExpression="ADD amount :amount",
-        ExpressionAttributeValues={":amount": amount},
-        ReturnValues="UPDATED_NEW",
-    )
-    response = UpdateItemResponse.model_validate(raw_response)
-    if response.attributes is None:
-        raise Exception(f"could not add currency to {id} {raw_response}")
-    return response.attributes["amount"]
+    with make_session() as session, session.begin():
+        if session.get(CurrencyInfo, id) is None:
+            session.execute(insert(CurrencyInfo).values(user_id=id, amount=amount))
+            return amount
+        else:
+            new_amount = session.scalar(
+                update(CurrencyInfo)
+                .where(CurrencyInfo.user_id == id)
+                .values(amount=CurrencyInfo.amount + amount)
+                .returning(CurrencyInfo.amount)
+            )
+            assert new_amount is not None
+            return new_amount

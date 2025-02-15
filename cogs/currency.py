@@ -124,10 +124,10 @@ class CurrencyCog(commands.GroupCog, group_name="currency"):
                     amount = ACCRUAL_CURRENCY_AMOUNT * (STREAM_CHAT_MULTIPLIER - 1)
                 case "blocked":
                     return
-            db.add_to_user(message.author.id, amount)
+            db.add_points_to_user(message.author.id, amount)
             return
         if self.cooldowns.try_use_normal(message.author):
-            db.add_to_user(message.author.id, ACCRUAL_CURRENCY_AMOUNT)
+            db.add_points_to_user(message.author.id, ACCRUAL_CURRENCY_AMOUNT)
 
     @app_commands.command(name="balance")
     async def check_balance(self, interaction: Interaction):
@@ -161,7 +161,7 @@ class CurrencyStaff(app_commands.Group, name="staff"):
     async def give_currency(
         self, interaction: Interaction, member: Member, amount: int
     ):
-        new_amount = db.add_to_user(member.id, amount)
+        new_amount = db.add_points_to_user(member.id, amount)
         LOG.info(
             f"{interaction.user} ({interaction.user.id}) gave {member} ({member.id}) {amount} currency"
         )

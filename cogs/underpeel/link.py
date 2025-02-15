@@ -8,8 +8,9 @@ from discord import (
 )
 from discord.app_commands import Range
 
-from database.valorant import clear_riot_id, get_riot_id, set_riot_id
 from config import CONFIG
+import database.valorant as db
+from models.valorant import RiotId
 
 LOG = logging.getLogger(__name__)
 
@@ -40,17 +41,16 @@ def _check_riot_id(riot_id: str) -> tuple[str, str] | str:
 
 @app_commands.command()
 async def link(interaction: Interaction, riot_id: Range[str, 7]):
-    respond = interaction.response.send_message
     match _check_riot_id(riot_id):
         case (game_name, tag):
             pass
         case error_message:
-            await respond(error_message)
+            await interaction.response.send_message(error_message, ephemeral=True)
             return
 
-    set_riot_id(interaction.user.id, game_name, tag)
+    db.set_riot_id(interaction.user.id, game_name, tag)
     LOG.info(f"{interaction.user} ({interaction.user.id}) linked self to {riot_id}")
-    await respond(
+    await interaction.response.send_message(
         f"Successfully linked to `{game_name}#{tag}`",
         ephemeral=True,
     )
@@ -58,7 +58,7 @@ async def link(interaction: Interaction, riot_id: Range[str, 7]):
 
 @app_commands.command()
 async def unlink(interaction: Interaction):
-    clear_riot_id(interaction.user.id)
+    db.clear_riot_id(interaction.user.id)
     LOG.info(f"{interaction.user} ({interaction.user.id}) unlinked their riot id")
     await interaction.response.send_message(
         "Successfully unlinked Riot ID.",
@@ -69,18 +69,17 @@ async def unlink(interaction: Interaction):
 @app_commands.command(name="link")
 @staff_check
 async def staff_link(interaction: Interaction, player: Member, riot_id: Range[str, 7]):
-    respond = interaction.response.send_message
     match _check_riot_id(riot_id):
         case (game_name, tag):
             pass
         case error_message:
-            await respond(error_message)
+            await interaction.response.send_message(error_message, ephemeral=True)
             return
-    set_riot_id(player.id, game_name, tag)
+    db.set_riot_id(player.id, game_name, tag)
     LOG.info(
         f"{interaction.user} ({interaction.user.id}) linked {player} ({player.id}) to {riot_id}"
     )
-    await respond(
+    await interaction.response.send_message(
         f"Successfully linked {player.mention} to `{game_name}#{tag}`",
         allowed_mentions=AllowedMentions.none(),
         ephemeral=True,
@@ -90,7 +89,7 @@ async def staff_link(interaction: Interaction, player: Member, riot_id: Range[st
 @app_commands.command(name="unlink")
 @staff_check
 async def staff_unlink(interaction: Interaction, player: Member):
-    clear_riot_id(player.id)
+    db.clear_riot_id(player.id)
     LOG.info(
         f"{interaction.user} ({interaction.user.id}) unlinked {player} ({player.id})'s riot id"
     )
@@ -103,10 +102,11 @@ async def staff_unlink(interaction: Interaction, player: Member):
 
 @app_commands.command()
 async def valorant_info(interaction: Interaction, player: Member):
-    riot_id = get_riot_id(player.id)
+    riot_id = RiotId.maybe_from_db(db.get_riot_id(player.id))
     if riot_id is None:
         await interaction.response.send_message(
             "No Riot id found for user",
+            ephemeral=True,
         )
         return
     await interaction.response.send_message(riot_id, ephemeral=True)

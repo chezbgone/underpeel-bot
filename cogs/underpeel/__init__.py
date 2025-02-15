@@ -2,7 +2,7 @@ from discord import app_commands
 
 from models.bot import Bot
 from config import CONFIG
-from .link import link, staff_link, staff_unlink, unlink, valorant_info
+from .link import staff_link, staff_unlink, valorant_info
 from .peelo import mk_check_eligibility, mk_check_team_eligibility
 
 

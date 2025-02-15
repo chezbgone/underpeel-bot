@@ -7,3 +7,5 @@ scripts
 
 config.toml
 secrets.toml
+
+underpeel.db

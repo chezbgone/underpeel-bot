@@ -1,48 +1,56 @@
-from typing import Literal
-from discord import AllowedMentions, Interaction, Message, ui
+from discord import AllowedMentions, Interaction, ui
 
 import database.predictions as db
-from models.prediction import Prediction
+from models.prediction import PredictionInfo, _pluralize
 
 
 class PredictionView(ui.View):
-    def __init__(self, prediction: Prediction):
+    def __init__(self, info: PredictionInfo):
         super().__init__(timeout=None)
 
-        if prediction.votes_a == 0 or prediction.votes_b == 0:
-            label_a = prediction.choice_a
-            label_b = prediction.choice_b
+        if info.votes_a == 0 or info.votes_b == 0:
+            label_a = info.choice_a
+            label_b = info.choice_b
         else:
-            total_votes = prediction.votes_a + prediction.votes_b
-            a_payout = total_votes / prediction.votes_a
-            b_payout = total_votes / prediction.votes_b
-            label_a = f"{prediction.choice_a} (×{a_payout:.2f})"
-            label_b = f"{prediction.choice_b} (×{b_payout:.2f})"
+            total_votes = info.votes_a + info.votes_b
+            a_payout = total_votes / info.votes_a
+            b_payout = total_votes / info.votes_b
+            label_a = f"{info.choice_a} (×{a_payout:.2f})"
+            label_b = f"{info.choice_b} (×{b_payout:.2f})"
 
         # callbacks in PredictionsCog.on_interaction for presistence over bot restarts
         self.add_item(
-            ui.Button(label=label_a, custom_id=f"up_prediction:{prediction.id}:a")
+            ui.Button(
+                label=label_a,
+                custom_id=f"up_prediction:{info.message.id}:a",
+                disabled=info.status != db.PredictionStatus.OPEN,
+            )
         )
         self.add_item(
-            ui.Button(label=label_b, custom_id=f"up_prediction:{prediction.id}:b")
+            ui.Button(
+                label=label_b,
+                custom_id=f"up_prediction:{info.message.id}:b",
+                disabled=info.status != db.PredictionStatus.OPEN,
+            )
         )
 
 
 class PredictionAmountPrompt(ui.Modal):
     def __init__(
         self,
-        prediction: Prediction,
-        prediction_message: Message,
-        choice: Literal["a", "b"],
-        balance: int,
+        info: PredictionInfo,
+        choice: db.PredictionChoice,
+        user_balance: int,
     ):
-        choice_label = prediction.choice_a if choice == "a" else prediction.choice_b
+        choice_label = (
+            info.choice_a if choice == db.PredictionChoice.A else info.choice_b
+        )
         super().__init__(title=f"Predicting {choice_label}")
-        self.prediction = prediction
-        self.prediction_message = prediction_message
-        self.choice: Literal["a", "b"] = choice
 
-        self.amount = ui.TextInput(label=f"amount (max {balance})")
+        self.info = info
+        self.choice = choice
+
+        self.amount = ui.TextInput(label=f"amount (max {user_balance})")
         self.add_item(self.amount)
 
     async def on_submit(self, interaction: Interaction):
@@ -56,7 +64,7 @@ class PredictionAmountPrompt(ui.Modal):
             )
             return
         response = db.add_prediction_vote(
-            prediction_id=self.prediction.id,
+            message_id=self.info.message.id,
             user_id=interaction.user.id,
             choice=self.choice,
             amount=amount,
@@ -77,65 +85,52 @@ class PredictionAmountPrompt(ui.Modal):
                     "could not find prediction", ephemeral=True
                 )
                 return
-            case "unknown error":
-                await interaction.response.send_message(
-                    "could not add vote", ephemeral=True
-                )
-                return
             case updated_prediction_info:
-                self.prediction = Prediction.from_db(updated_prediction_info)
+                self.info.votes_a = updated_prediction_info[db.PredictionChoice.A]
+                self.info.votes_b = updated_prediction_info[db.PredictionChoice.B]
 
         choice_name = (
-            self.prediction.choice_a if self.choice == "a" else self.prediction.choice_b
+            self.info.choice_a
+            if self.choice == db.PredictionChoice.A
+            else self.info.choice_b
         )
         await interaction.response.send_message(
             f"Received {self.amount} for {choice_name}", ephemeral=True
         )
 
-        message = self.prediction_message
+        message = await self.info.message.fetch()
         assert message is not None and len(message.embeds) == 1
         [embed] = message.embeds
-        new_embed = self.prediction.update_embed(embed)
-        new_view = PredictionView(self.prediction)
+        new_embed = self.info.make_embed(embed)
+        new_view = PredictionView(self.info)
         await message.edit(embed=new_embed, view=new_view)
 
         assert message.thread is not None
-
-        def pluralize(n, noun: str):
-            return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
-
         await message.thread.send(
-            f"{interaction.user.mention} put {pluralize(amount, 'point')} on {choice_name}",
+            f"{interaction.user.mention} put {_pluralize(amount, 'point')} on {choice_name}",
             allowed_mentions=AllowedMentions.none(),
         )
 
 
 class PredictionCloseControls(ui.View):
-    def __init__(self, prediction: Prediction, prediction_message: Message) -> None:
+    def __init__(self, info: PredictionInfo) -> None:
         super().__init__(timeout=None)
-        self.prediction = prediction
-        self.prediction_message = prediction_message
+        self.info = info
 
     @ui.button(label="Close Prediction", emoji="🚫")
     async def close_prediction(self, interaction: Interaction, _: ui.Button):
-        assert interaction.message is not None
-        result = db.close_prediction(self.prediction.id)
+        result = db.close_prediction(self.info.message.id)
         match result:
             case "prediction has already been closed":
                 await interaction.response.edit_message(
-                    view=PredictionPayoutControls(
-                        self.prediction, self.prediction_message
-                    )
+                    view=PredictionPayoutControls(self.info)
                 )
             case "prediction has already been paid":
                 await interaction.response.send_message(result)
                 return
-            case "could not close prediction":
-                await interaction.response.send_message(result)
-                return
 
-        # disable buttons
-        message = await self.prediction_message.fetch()
+        # disable voting buttons
+        message = await self.info.message.fetch()
         view = ui.View.from_message(message)
         for choice_button in view.children:
             assert isinstance(choice_button, ui.Button)
@@ -147,39 +142,35 @@ class PredictionCloseControls(ui.View):
 
         # change controls
         await interaction.response.edit_message(
-            view=PredictionPayoutControls(self.prediction, self.prediction_message)
+            view=PredictionPayoutControls(self.info)
         )
 
 
 class PayoutButton(ui.Button):
     def __init__(
         self,
-        prediction: Prediction,
-        prediction_message: Message,
-        choice: Literal["a", "b"],
+        info: PredictionInfo,
+        winner: db.PredictionChoice,
     ):
-        self.prediction = prediction
-        self.prediction_message = prediction_message
-        self.winner: Literal["a", "b"] = choice
+        self.info = info
+        self.winner = winner
 
         self.choice_label = (
-            prediction.choice_a if choice == "a" else prediction.choice_b
+            info.choice_a if winner == db.PredictionChoice.A else info.choice_b
         )
         super().__init__(label=f"Payout {self.choice_label}")
 
     async def callback(self, interaction: Interaction):
-        result = db.pay_out_prediction(self.prediction.id, self.winner)
+        result = db.pay_out_prediction(self.info.message.id, self.winner)
         match result:
             case "prediction has already been paid out":
                 await interaction.response.send_message(result, ephemeral=True)
                 return
-            case "could not pay out prediction":
-                await interaction.response.send_message(result, ephemeral=True)
-                return
-            case updated_prediction_info:
-                self.prediction = Prediction.from_db(updated_prediction_info)
+        prediction = db.get_prediction(self.info.message.id)
+        assert prediction is not None
+        info = PredictionInfo.from_db(prediction, self.info.message)
 
-        # disable button
+        # disable payout buttons
         assert interaction.message is not None
         view = ui.View.from_message(interaction.message)
         for button in view.children:
@@ -187,12 +178,12 @@ class PayoutButton(ui.Button):
             button.disabled = True
         await interaction.response.edit_message(view=view)
 
-        # edit prediction_message to show winner
-        message = await self.prediction_message.fetch()
+        # edit embed to show winner
+        message = await info.message.fetch()
         assert len(message.embeds) == 1
         [embed] = message.embeds
-        embed = self.prediction.update_embed(embed, winner=self.winner)
-        await self.prediction_message.edit(embed=embed)
+        embed = info.make_embed(base_embed=embed)
+        await message.edit(embed=embed)
 
         # send message in thread
         assert message.thread is not None
@@ -202,8 +193,8 @@ class PayoutButton(ui.Button):
 
 
 class PredictionPayoutControls(ui.View):
-    def __init__(self, prediction: Prediction, prediction_message: Message) -> None:
+    def __init__(self, info: PredictionInfo) -> None:
         super().__init__(timeout=None)
 
-        self.add_item(PayoutButton(prediction, prediction_message, "a"))
-        self.add_item(PayoutButton(prediction, prediction_message, "b"))
+        self.add_item(PayoutButton(info, db.PredictionChoice.A))
+        self.add_item(PayoutButton(info, db.PredictionChoice.B))

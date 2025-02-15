@@ -1,4 +1,3 @@
-import logging
 import re
 from discord import (
     Interaction,
@@ -11,15 +10,13 @@ from discord.ext import commands
 import database.predictions as db
 from config import CONFIG
 from models.bot import Bot
-from models.prediction import Prediction
+from models.prediction import PredictionInfo
 from views.prediction import (
     PredictionAmountPrompt,
     PredictionCloseControls,
     PredictionPayoutControls,
     PredictionView,
 )
-
-LOG = logging.getLogger(__name__)
 
 management_check = app_commands.checks.has_any_role(
     CONFIG["board_role_id"],
@@ -49,14 +46,24 @@ class PredictionsCog(commands.GroupCog, group_name="prediction"):
                 "Can't create a prediction here", ephemeral=True
             )
             return
-        prediction, p_message, embed = await Prediction.new(
-            channel, title, choice_a, choice_b
+        message = await channel.send("creating prediction")
+        db.create_prediction(message.id, title, choice_a, choice_b)
+
+        info = PredictionInfo(
+            message=message,
+            title=title,
+            choice_a=choice_a,
+            choice_b=choice_b,
+            status=db.PredictionStatus.OPEN,
         )
-        view = PredictionView(prediction)
-        p_message = await p_message.edit(content=None, embed=embed, view=view)
-        await channel.create_thread(name=f"{title} votes", message=p_message)
+
+        view = PredictionView(info)
+        embed = info.make_embed()
+
+        await message.edit(content=None, embed=embed, view=view)
+        await channel.create_thread(name=f"Prediction: {title}", message=message)
         await interaction.response.send_message(
-            view=PredictionCloseControls(prediction, p_message),
+            view=PredictionCloseControls(info),
             ephemeral=True,
         )
 
@@ -74,21 +81,26 @@ class PredictionsCog(commands.GroupCog, group_name="prediction"):
             )
             return
         assert thread.starter_message is not None
-        prediction_id = db.get_prediction_id_from_message_id(thread.starter_message.id)
-        assert (prediction_info := db.get_prediction(prediction_id)) is not None
-        prediction = Prediction.from_db(prediction_info)
+        prediction = db.get_prediction(thread.starter_message.id)
+        if prediction is None:
+            await interaction.response.send_message(
+                "This thread is not a prediction thread",
+                ephemeral=True,
+            )
+            return
+        info = PredictionInfo.from_db(prediction, thread.starter_message)
         match prediction.status:
-            case "open":
+            case db.PredictionStatus.OPEN:
                 await interaction.response.send_message(
-                    view=PredictionCloseControls(prediction, thread.starter_message),
+                    view=PredictionCloseControls(info),
                     ephemeral=True,
                 )
-            case "closed":
+            case db.PredictionStatus.CLOSED:
                 await interaction.response.send_message(
-                    view=PredictionPayoutControls(prediction, thread.starter_message),
+                    view=PredictionPayoutControls(info),
                     ephemeral=True,
                 )
-            case "paid":
+            case db.PredictionStatus.PAID:
                 await interaction.response.send_message(
                     "prediction has already been paid out",
                     ephemeral=True,
@@ -102,27 +114,33 @@ class PredictionsCog(commands.GroupCog, group_name="prediction"):
         if not isinstance(button_id, str):
             return
         pattern = re.compile(
-            r"up_prediction:(?P<prediction_id>\w+):(?P<prediction_choice_id>[ab])"
+            r"up_prediction:(?P<message_id>\d+):(?P<prediction_choice_id>[ab])"
         )
         if (match := pattern.fullmatch(button_id)) is None:
             # interaction is not of interest
             return
+        message_id = int(match["message_id"])
+        choice = (
+            db.PredictionChoice.A
+            if match["prediction_choice_id"] == "a"
+            else db.PredictionChoice.B
+        )
 
-        assert interaction.message is not None
-        prediction_info = db.get_prediction(match["prediction_id"])
-        if prediction_info is None:
+        prediction = db.get_prediction(message_id)
+        assert prediction is not None
+        if prediction is None:
             await interaction.response.send_message(
                 "could not find prediction", ephemeral=True
             )
             return
-        prediction = Prediction.from_db(prediction_info)
 
+        assert interaction.message is not None
+        info = PredictionInfo.from_db(prediction, interaction.message)
         await interaction.response.send_modal(
             PredictionAmountPrompt(
-                prediction,
-                interaction.message,
-                match["prediction_choice_id"],  # type: ignore
-                balance=db.get_user_points(interaction.user.id),
+                info,
+                choice,
+                user_balance=db.get_user_points(interaction.user.id),
             )
         )
         return

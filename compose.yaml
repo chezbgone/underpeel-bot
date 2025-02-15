@@ -3,6 +3,8 @@ services:
     build: .
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - sqlite-data:/app/sqlite-data
     configs:
       - source: up_config
         target: /app/config.toml
@@ -14,6 +16,9 @@ services:
       options:
         awslogs-group: underpeel-bot-logs
         awslogs-stream: underpeel-bot
+
+volumes:
+  sqlite-data:
 
 configs:
   up_config:

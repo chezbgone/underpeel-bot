@@ -2,18 +2,26 @@ from dataclasses import dataclass
 from urllib.parse import quote
 from typing import ClassVar, Literal, Self, final
 
+import database.models as db
+
 
 @dataclass(frozen=True)
 class RiotId:
     game_name: str
     tagline: str
 
-    @property
-    def tag(self) -> str:
-        return self.tagline
+    @classmethod
+    def from_db(cls, riot_id: db.RiotId) -> Self:
+        return cls(riot_id.game_name, riot_id.tagline)
+
+    @classmethod
+    def maybe_from_db(cls, riot_id: db.RiotId | None) -> Self | None:
+        if riot_id is None:
+            return None
+        return cls(riot_id.game_name, riot_id.tagline)
 
     def __str__(self) -> str:
-        return f"{self.game_name}#{self.tag}"
+        return f"{self.game_name}#{self.tagline}"
 
     def tracker(self, style=True) -> str:
         url_base = "https://tracker.gg/valorant/profile/riot"
