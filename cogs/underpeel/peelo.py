@@ -12,8 +12,8 @@ from discord import (
 )
 from pydantic import BaseModel, Field
 
+import database.valorant as db
 from config import CONFIG, SECRETS
-from database.valorant import get_riot_id
 from models.bot import Bot
 from models.peelo import (
     ActInfo,
@@ -75,7 +75,7 @@ async def ranked_matches_from_henrik(
         peak = rank_from_name(peak_data.name)
         return ActInfo(act_name, played, peak)
 
-    url = f"https://api.henrikdev.xyz/valorant/v3/mmr/na/pc/{riot_id.game_name}/{riot_id.tag}"
+    url = f"https://api.henrikdev.xyz/valorant/v3/mmr/na/pc/{riot_id.game_name}/{riot_id.tagline}"
     headers = {"Authorization": SECRETS["HENRIKDEV_KEY"]}
     async with http_session.get(url, headers=headers) as response:
         try:
@@ -165,7 +165,7 @@ def mk_check_eligibility(bot: Bot):
     @staff_check
     async def check_eligibility(interaction: Interaction, player: Member):
         await interaction.response.defer(ephemeral=True)
-        riot_id = get_riot_id(player.id)
+        riot_id = RiotId.maybe_from_db(db.get_riot_id(player.id))
         matches_info = await maybe_get_matches_info(bot.http_session, riot_id)
         role_info = get_role_info(player)
         await interaction.followup.send(
@@ -219,7 +219,7 @@ def mk_check_team_eligibility(bot: Bot):
     ):
         await interaction.response.defer(ephemeral=True)
         players = [player1, player2, player3, player4, player5]
-        maybe_riot_ids = [get_riot_id(p.id) for p in players]
+        maybe_riot_ids = [RiotId.maybe_from_db(db.get_riot_id(p.id)) for p in players]
         matches_infos = [
             await maybe_get_matches_info(bot.http_session, riot_id)
             for riot_id in maybe_riot_ids

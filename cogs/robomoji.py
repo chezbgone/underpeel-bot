@@ -17,7 +17,7 @@ from discord import (
 from discord.ext import commands
 
 from config import CONFIG
-import database.robomoji_db as db
+import database.robomoji as db
 
 LOG = logging.getLogger(__name__)
 
@@ -27,6 +27,22 @@ management_check = app_commands.checks.has_any_role(
     CONFIG["mod_role_id"],
     CONFIG["dev_role_id"],
 )
+
+
+def _display_robomoji_transaction(transaction: db.RobomojiTransaction) -> str:
+    return " ".join(
+        (
+            f"<t:{round(transaction.time.timestamp())}>:",
+            "SYSTEM"
+            if transaction.staff_id == "SYSTEM"
+            else f"<@{transaction.staff_id}>",
+            transaction.action.value,
+            transaction.emoji,
+            "to" if transaction.action.value == "added" else "from",
+            f"<@{transaction.chatter_id}>",
+            f"(reason: {transaction.reason})",
+        )
+    )
 
 
 @app_commands.guilds(CONFIG["discord_server_id"])
@@ -59,7 +75,7 @@ class RobomojiCog(commands.GroupCog, group_name="robomoji"):
         emoji_info = db.get_emoji_info(author_id)
         if emoji_info is None:
             return
-        if len(emoji_info.emojis) == 0:
+        if len(emoji_info.robomojis) == 0:
             return
         if (
             emoji_info.last_reacted is not None
@@ -68,17 +84,17 @@ class RobomojiCog(commands.GroupCog, group_name="robomoji"):
             # too soon, don't add reactions
             return
         db.register_emoji_use(author_id)
-        for emoji in emoji_info.emojis:
+        for robomoji in emoji_info.robomojis:
             try:
-                await message.add_reaction(emoji)
+                await message.add_reaction(robomoji.emoji)
             except HTTPException as e:
                 if e.code == 10014 or (e.code == 50035 and "emoji_id" in e.text):
                     LOG.error(
-                        f"emoji '{emoji}' for {message.author.id}({message.author.name}) "
+                        f"emoji '{robomoji.emoji}' for {message.author.id}({message.author.name}) "
                         f"does not exist. removing from database.",
                     )
                     db.toggle_emoji(
-                        "SYSTEM", author_id, emoji, "bot could not find emoji"
+                        "SYSTEM", author_id, robomoji.emoji, "bot could not find emoji"
                     )
 
     @app_commands.command(name="toggle")
@@ -96,13 +112,14 @@ class RobomojiCog(commands.GroupCog, group_name="robomoji"):
         reason: str,
     ):
         action = db.toggle_emoji(interaction.user.id, member.id, emoji, reason)
-        act_preposition = "to" if action == "added" else "from"
+        act_preposition = "to" if action.value == "added" else "from"
         LOG.info(
             f"{interaction.user} {action} robomoji {emoji} "
             f"{act_preposition} {member} (reason: {reason})"
         )
         await interaction.response.send_message(
-            f"{action} robomoji {emoji} {act_preposition} {member}"
+            f"{action.value} robomoji {emoji} {act_preposition} {member}",
+            allowed_mentions=AllowedMentions.none(),
         )
 
     @app_commands.command(name="list")
@@ -112,10 +129,12 @@ class RobomojiCog(commands.GroupCog, group_name="robomoji"):
     )
     async def list_emoji(self, interaction: Interaction, member: Member):
         emoji_info = db.get_emoji_info(member.id)
-        if emoji_info is None or len(emoji_info.emojis) == 0:
+        if emoji_info is None or len(emoji_info.robomojis) == 0:
             await interaction.response.send_message(f"{member.name} has no robomojis")
             return
-        await interaction.response.send_message(" ".join(emoji_info.emojis))
+        await interaction.response.send_message(
+            " ".join(robomoji.emoji for robomoji in emoji_info.robomojis)
+        )
 
     @app_commands.command(name="history")
     @management_check
@@ -129,22 +148,7 @@ class RobomojiCog(commands.GroupCog, group_name="robomoji"):
         history = db.get_emoji_changes(member.id, limit)
         response = [
             f"here are the most recent robomoji commands for {member.name}:",
-            *(
-                " ".join(
-                    (
-                        f"<t:{round(transaction.time.timestamp())}>:",
-                        "SYSTEM"
-                        if transaction.staff == "SYSTEM"
-                        else f"<@{transaction.staff}>",
-                        transaction.action,
-                        transaction.emoji,
-                        "to" if transaction.action == "added" else "from",
-                        f"<@{transaction.chatter_id}>",
-                        f"(reason: {transaction.reason})",
-                    )
-                )
-                for transaction in history
-            ),
+            *(_display_robomoji_transaction(transaction) for transaction in history),
         ]
         await interaction.response.send_message(
             "\n".join(response), allowed_mentions=AllowedMentions.none()

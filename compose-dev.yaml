@@ -1,12 +1,4 @@
 services:
   bot:
-    depends_on:
-      - db
     logging:
       driver: local
-  db:
-    image: "amazon/dynamodb-local"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - '8000:8000'
