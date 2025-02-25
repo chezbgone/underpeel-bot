@@ -77,7 +77,7 @@ class PredictionAmountPrompt(ui.Modal):
                 return
             case "not enough points":
                 await interaction.response.send_message(
-                    "not enough points", ephemeral=True
+                    "not enough peels", ephemeral=True
                 )
                 return
             case "nonexistent prediction":
@@ -107,7 +107,7 @@ class PredictionAmountPrompt(ui.Modal):
 
         assert message.thread is not None
         await message.thread.send(
-            f"{interaction.user.mention} put {_pluralize(amount, 'point')} on {choice_name}",
+            f"{interaction.user.mention} put {_pluralize(amount, 'peel')} on {choice_name}",
             allowed_mentions=AllowedMentions.none(),
         )
 

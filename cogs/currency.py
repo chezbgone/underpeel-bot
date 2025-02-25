@@ -131,10 +131,10 @@ class CurrencyCog(commands.GroupCog, group_name="currency"):
 
     @app_commands.command(name="balance")
     async def check_balance(self, interaction: Interaction):
-        points = db.get_user_points(interaction.user.id)
-        point_plural = "point" if points == 1 else "points"
+        peels = db.get_user_points(interaction.user.id)
+        peel_plural = "peel" if peels == 1 else "peels"
         await interaction.response.send_message(
-            f"You have {points} {point_plural}.",
+            f"You have {peels} {peel_plural}.",
             ephemeral=True,
         )
 
@@ -148,10 +148,10 @@ class CurrencyStaff(app_commands.Group, name="staff"):
     @app_commands.command(name="balance")
     @management_check
     async def check_balance(self, interaction: Interaction, member: Member):
-        points = db.get_user_points(member.id)
-        point_plural = "point" if points == 1 else "points"
+        peels = db.get_user_points(member.id)
+        peel_plural = "peel" if peels == 1 else "peels"
         await interaction.response.send_message(
-            f"{member.mention} has {points} {point_plural}.",
+            f"{member.mention} has {peels} {peel_plural}.",
             allowed_mentions=AllowedMentions.none(),
             ephemeral=True,
         )
@@ -163,7 +163,7 @@ class CurrencyStaff(app_commands.Group, name="staff"):
     ):
         new_amount = db.add_points_to_user(member.id, amount)
         LOG.info(
-            f"{interaction.user} ({interaction.user.id}) gave {member} ({member.id}) {amount} currency"
+            f"{interaction.user} ({interaction.user.id}) gave {member} ({member.id}) {amount} peels"
         )
         await interaction.response.send_message(
             f"Added {amount} to {member.mention}'s balance. They now have {new_amount}.",
