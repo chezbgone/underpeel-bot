@@ -19,7 +19,7 @@ from .models import (
 
 LOG = logging.getLogger(__name__)
 
-engine = create_engine("sqlite:///underpeel.db")
+engine = create_engine("sqlite:///sqlite-data/underpeel.db")
 _SessionFactory = sessionmaker(bind=engine)
 
 

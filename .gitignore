@@ -4,6 +4,7 @@
 **/__pycache__
 
 scripts
+sqlite-data
 
 config.toml
 secrets.toml
