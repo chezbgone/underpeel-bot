@@ -9,8 +9,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 class WithDataclassRepr:
     def __repr__(self) -> str:
         if not hasattr(self, "_repr_cache"):
-            self.__repr__cache = dataclass(self.__class__).__repr__
-        return self.__repr__cache(self)
+            self._repr_cache = dataclass(self.__class__).__repr__
+        return self._repr_cache(self)
 
 
 class Base(WithDataclassRepr, DeclarativeBase):
