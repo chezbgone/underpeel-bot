@@ -105,6 +105,11 @@ class PredictionsCog(commands.GroupCog, group_name="prediction"):
                     "prediction has already been paid out",
                     ephemeral=True,
                 )
+            case db.PredictionStatus.REFUNDED:
+                await interaction.response.send_message(
+                    "prediction has been refunded",
+                    ephemeral=True,
+                )
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: Interaction):

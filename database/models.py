@@ -88,6 +88,7 @@ class PredictionStatus(Enum):
     OPEN = "open"
     CLOSED = "closed"
     PAID = "paid"
+    REFUNDED = "refunded"
 
 
 class PredictionChoice(Enum):
@@ -103,6 +104,7 @@ class Prediction(Base):
     status: Mapped[PredictionStatus]
     choice_a: Mapped[str]
     choice_b: Mapped[str]
+    winner: Mapped[PredictionChoice | None]
     votes: Mapped[list["PredictionVote"]] = relationship()
 
 

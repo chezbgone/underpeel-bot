@@ -34,6 +34,7 @@ class PredictionInfo:
             choice_a=prediction.choice_a,
             choice_b=prediction.choice_b,
             status=prediction.status,
+            winner=prediction.winner,
         )
 
     def make_embed(self, base_embed: Embed | None = None) -> Embed:
@@ -41,18 +42,21 @@ class PredictionInfo:
             return f"{_pluralize(votes, 'point')}" + (" (WINNER)" if winner else "")
 
         if base_embed is None:
-            base_embed = Embed(color=Color.random(), title=self.title)
+            embed = Embed(color=Color.random(), title=self.title)
+        else:
+            embed = base_embed.clear_fields()
 
-        return (
-            base_embed.clear_fields()
-            .add_field(
-                name=self.choice_a,
-                value=make_label(self.votes_a, self.winner == db.PredictionChoice.A),
-                inline=True,
-            )
-            .add_field(
-                name=self.choice_b,
-                value=make_label(self.votes_b, self.winner == db.PredictionChoice.B),
-                inline=True,
-            )
+        if self.status == db.PredictionStatus.REFUNDED:
+            embed.title = f"[REFUNDED] {embed.title}"
+
+        embed.add_field(
+            name=self.choice_a,
+            value=make_label(self.votes_a, self.winner == db.PredictionChoice.A),
+            inline=True,
+        ).add_field(
+            name=self.choice_b,
+            value=make_label(self.votes_b, self.winner == db.PredictionChoice.B),
+            inline=True,
         )
+
+        return embed

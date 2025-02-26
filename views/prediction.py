@@ -95,7 +95,7 @@ class PredictionAmountPrompt(ui.Modal):
             else self.info.choice_b
         )
         await interaction.response.send_message(
-            f"Received {self.amount} for {choice_name}", ephemeral=True
+            f"You put {self.amount} on {choice_name}", ephemeral=True
         )
 
         message = await self.info.message.fetch()
@@ -128,6 +128,9 @@ class PredictionCloseControls(ui.View):
             case "prediction has already been paid":
                 await interaction.response.send_message(result)
                 return
+            case updated_prediction_info:
+                self.info.votes_a = updated_prediction_info[db.PredictionChoice.A]
+                self.info.votes_b = updated_prediction_info[db.PredictionChoice.B]
 
         # disable voting buttons
         message = await self.info.message.fetch()
@@ -166,9 +169,15 @@ class PayoutButton(ui.Button):
             case "prediction has already been paid out":
                 await interaction.response.send_message(result, ephemeral=True)
                 return
-        prediction = db.get_prediction(self.info.message.id)
-        assert prediction is not None
-        info = PredictionInfo.from_db(prediction, self.info.message)
+            case "prediction has no winners", updated_prediction_info:
+                response = "no winners. prediction refunded"
+            case updated_prediction_info:
+                response = f"prediction has been paid out to {self.choice_label}"
+
+        self.info.votes_a = updated_prediction_info[db.PredictionChoice.A]
+        self.info.votes_b = updated_prediction_info[db.PredictionChoice.B]
+        self.info.winner = self.winner
+        self.info.status = db.PredictionStatus.PAID
 
         # disable payout buttons
         assert interaction.message is not None
@@ -179,17 +188,54 @@ class PayoutButton(ui.Button):
         await interaction.response.edit_message(view=view)
 
         # edit embed to show winner
-        message = await info.message.fetch()
+        message = await self.info.message.fetch()
         assert len(message.embeds) == 1
         [embed] = message.embeds
-        embed = info.make_embed(base_embed=embed)
+        embed = self.info.make_embed(base_embed=embed)
         await message.edit(embed=embed)
 
         # send message in thread
         assert message.thread is not None
-        await message.thread.send(
-            f"Prediction has been paid out to {self.choice_label}"
-        )
+        await message.thread.send(response)
+
+
+class RefundButon(ui.Button):
+    def __init__(self, info: PredictionInfo):
+        self.info = info
+        super().__init__(label="Refund")
+
+    async def callback(self, interaction: Interaction):
+        result = db.refund_prediction(self.info.message.id)
+
+        match result:
+            case "prediction has already been paid out":
+                await interaction.response.send_message(
+                    "prediction has been paid out. cannot refund", ephemeral=True
+                )
+                return
+            case updated_prediction_info:
+                self.info.votes_a = updated_prediction_info[db.PredictionChoice.A]
+                self.info.votes_b = updated_prediction_info[db.PredictionChoice.B]
+                self.info.status = db.PredictionStatus.REFUNDED
+
+        # disable payout buttons
+        assert interaction.message is not None
+        view = ui.View.from_message(interaction.message)
+        for button in view.children:
+            assert isinstance(button, ui.Button)
+            button.disabled = True
+        await interaction.response.edit_message(view=view)
+
+        # edit embed to show refund
+        message = await self.info.message.fetch()
+        assert len(message.embeds) == 1
+        [embed] = message.embeds
+        embed = self.info.make_embed(base_embed=embed)
+        await message.edit(embed=embed)
+
+        # send message in thread
+        assert message.thread is not None
+        await message.thread.send("Prediction has been refunded")
 
 
 class PredictionPayoutControls(ui.View):
@@ -198,3 +244,4 @@ class PredictionPayoutControls(ui.View):
 
         self.add_item(PayoutButton(info, db.PredictionChoice.A))
         self.add_item(PayoutButton(info, db.PredictionChoice.B))
+        self.add_item(RefundButon(info))
