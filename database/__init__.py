@@ -7,6 +7,7 @@ from .models import (
     Base,
     # re-export
     CurrencyInfo as CurrencyInfo,
+    CurrencyTransaction as CurrencyTransaction,
     RobomojiInfo as RobomojiInfo,
     Robomoji as Robomoji,
     RobomojiTransaction as RobomojiTransaction,

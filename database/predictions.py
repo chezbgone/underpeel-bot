@@ -68,7 +68,12 @@ def add_prediction_vote(
 
         if get_user_points(user_id) < amount:
             return "not enough points"
-        add_points_to_user(user_id, -amount)
+
+        choice_label = (
+            prediction.choice_a if choice == PredictionChoice.A else prediction.choice_b
+        )
+        reason = f"voted for {choice} ({choice_label}) in prediction {message_id}"
+        add_points_to_user(user_id, -amount, reason)
 
         vote = PredictionVote(
             prediction=message_id,
@@ -128,7 +133,9 @@ def pay_out_prediction(message_id: int, winner: PredictionChoice):
                 continue
             reward = ceil(total_amount * vote.amount / correct_vote_amount)
             print("adding", vote.user_id, reward)
-            add_points_to_user(vote.user_id, reward)
+            add_points_to_user(
+                vote.user_id, reward, reason=f"prediction {message_id} payout"
+            )
 
         prediction.status = PredictionStatus.PAID
         prediction.winner = winner
@@ -150,6 +157,8 @@ def refund_prediction(message_id: int):
         ).all()
 
         for vote in votes:
-            add_points_to_user(vote.user_id, vote.amount)
+            add_points_to_user(
+                vote.user_id, vote.amount, reason=f"prediction {message_id} refund"
+            )
         prediction.status = PredictionStatus.REFUNDED
         return get_votes_summary(message_id, session)

@@ -27,6 +27,17 @@ class CurrencyInfo(Base):
     amount: Mapped[int]
 
 
+class CurrencyTransaction(Base):
+    __tablename__ = "currency_transactions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int]
+    time: Mapped[datetime]
+    delta: Mapped[int]
+    end_amount: Mapped[int]
+    reason: Mapped[str]
+
+
 #####    ROBOMOJI    #####
 
 

@@ -3,7 +3,15 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
 
-from discord import AllowedMentions, Interaction, Member, Message, app_commands
+from discord import (
+    AllowedMentions,
+    Color,
+    Embed,
+    Interaction,
+    Member,
+    Message,
+    app_commands,
+)
 from discord.ext import commands, tasks
 
 import database.currency as db
@@ -94,6 +102,17 @@ class CurrencyCooldownMap:
         return self.map[member.id].try_use_stream()
 
 
+def _display_currency_transaction(transaction: db.CurrencyTransaction) -> str:
+    beginning_amount = transaction.end_amount - transaction.delta
+    return "".join(
+        [
+            f"**<t:{round(transaction.time.timestamp())}>: ",
+            f"{beginning_amount}{transaction.delta:+}→{transaction.end_amount}**\n",
+            transaction.reason,
+        ]
+    )
+
+
 @app_commands.guilds(CONFIG["discord_server_id"])
 class CurrencyCog(commands.GroupCog, group_name="currency"):
     def __init__(self, bot: Bot):
@@ -138,6 +157,25 @@ class CurrencyCog(commands.GroupCog, group_name="currency"):
             ephemeral=True,
         )
 
+    @app_commands.command(name="history")
+    async def transaction_history(self, interaction: Interaction, member: Member):
+        LIMIT = 15
+        history = db.get_currency_transactions(member.id, LIMIT)
+        if len(history) == 0:
+            description = "No transactions found."
+        else:
+            description = "\n".join(
+                [_display_currency_transaction(transaction) for transaction in history]
+            )
+        embed = Embed(
+            title=f"most recent transactions for {member.name}",
+            description=description,
+            color=Color.gold(),
+        )
+        await interaction.response.send_message(
+            embed=embed, allowed_mentions=AllowedMentions.none()
+        )
+
     @tasks.loop(hours=1)
     async def clear_cooldown_cache(self):
         self.cooldowns._clean_cache()
@@ -161,10 +199,9 @@ class CurrencyStaff(app_commands.Group, name="staff"):
     async def give_currency(
         self, interaction: Interaction, member: Member, amount: int
     ):
-        new_amount = db.add_points_to_user(member.id, amount)
-        LOG.info(
-            f"{interaction.user} ({interaction.user.id}) gave {member} ({member.id}) {amount} peels"
-        )
+        reason = f"{interaction.user} ({interaction.user.id}) gave {member} ({member.id}) {amount} peels"
+        new_amount = db.add_points_to_user(member.id, amount, reason)
+        LOG.info(reason)
         await interaction.response.send_message(
             f"Added {amount} to {member.mention}'s balance. They now have {new_amount}.",
             allowed_mentions=AllowedMentions.none(),
