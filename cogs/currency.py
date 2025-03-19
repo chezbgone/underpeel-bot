@@ -173,7 +173,9 @@ class CurrencyCog(commands.GroupCog, group_name="currency"):
             color=Color.gold(),
         )
         await interaction.response.send_message(
-            embed=embed, allowed_mentions=AllowedMentions.none()
+            embed=embed,
+            ephemeral=True,
+            allowed_mentions=AllowedMentions.none(),
         )
 
     @tasks.loop(hours=1)
