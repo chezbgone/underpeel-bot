@@ -12,6 +12,7 @@ async def http_session():
     return aiohttp.ClientSession()
 
 
+@pytest.mark.skip(reason="Old season, e9 no longer needed")
 @pytest.mark.asyncio
 async def test_e9_eligibility(http_session):
     _, actual, _ = await peelo.get_matches_info(
@@ -32,6 +33,7 @@ async def test_e10_eligibility(http_session):
         raise ValueError(eligibility)
 
 
+@pytest.mark.skip(reason="Old season, e9 no longer needed")
 @pytest.mark.asyncio
 async def test_e9_overrides_e10(http_session):
     _, actual, _ = await peelo.get_matches_info(http_session, RiotId("snoww", "hater"))

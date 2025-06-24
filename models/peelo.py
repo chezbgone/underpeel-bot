@@ -59,13 +59,13 @@ def peelo_of(rank: SimpleRank) -> int:
         case "Iron" | "Bronze" | "Silver":
             return 500
         case "Gold":
-            return 800 + 100 * rank.division
+            return 500 + 100 * rank.division
         case "Platinum":
-            return 1100 + 100 * rank.division
+            return 800 + 100 * rank.division
         case "Diamond":
-            return 1400 + 100 * rank.division
+            return 1100 + 100 * rank.division
         case "Ascendant":
-            return 1700 + 100 * rank.division
+            return 1400 + 200 * rank.division
 
 
 def peelo_description(rank: Rank):
@@ -77,33 +77,19 @@ def peelo_description(rank: Rank):
 
 
 @dataclass
-class Episode9Eligibility:
+class Episode10Eligibility:
     a1: int
     a2: int
-    a3: int
     peak: Rank
 
     @property
     def total_games(self):
-        return self.a1 + self.a2 + self.a3
+        return self.a1 + self.a2
 
     def details(self):
         return (
             ":white_check_mark: "
-            f"{self.a1} + {self.a2} + {self.a3} = {self.total_games} games in episode 9 "
-            f"with peak {self.peak}{peelo_description(self.peak)}"
-        )
-
-
-@dataclass
-class Episode10Eligibility:
-    games_played: int
-    peak: Rank
-
-    def details(self):
-        return (
-            ":white_check_mark: "
-            f"{self.games_played} games in episode 10 act 1 "
+            f"{self.a1} + {self.a2} = {self.total_games} games in episode 10 "
             f"with peak {self.peak}{peelo_description(self.peak)}"
         )
 
@@ -114,7 +100,7 @@ class NotEligible:
         return ":x: Not enough games played."
 
 
-StatsEligibility = Episode9Eligibility | Episode10Eligibility | NotEligible
+StatsEligibility = Episode10Eligibility | NotEligible
 
 
 @dataclass
@@ -133,21 +119,15 @@ class ActInfo:
 
 @dataclass
 class PlayerStats:
-    e9a1: ActInfo
-    e9a2: ActInfo
-    e9a3: ActInfo
     e10a1: ActInfo
+    e10a2: ActInfo
 
     def eligibility(self) -> StatsEligibility:
-        acts = [self.e9a1, self.e9a2, self.e9a3]
+        acts = [self.e10a1, self.e10a2]
         games = [act.games_played for act in acts]
-        if sum(games) >= 75:
-            a1, a2, a3 = games
+        if sum(games) >= 100:
+            a1, a2 = games
             peaks = [act.peak_rank for act in acts if act.peak_rank is not None]
             peak = max(peaks, default=UnknownRank(), key=rank_sort_key)
-            return Episode9Eligibility(a1, a2, a3, peak)
-        if self.e10a1.games_played >= 50:
-            # fails if player somehow lost all games
-            assert self.e10a1.peak_rank is not None
-            return Episode10Eligibility(self.e10a1.games_played, self.e10a1.peak_rank)
+            return Episode10Eligibility(a1, a2, peak)
         return NotEligible()

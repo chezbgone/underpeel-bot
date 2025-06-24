@@ -18,7 +18,6 @@ from models.bot import Bot
 from models.peelo import (
     ActInfo,
     Episode10Eligibility,
-    Episode9Eligibility,
     NotEligible,
     PlayerStats,
     Rank,
@@ -83,7 +82,7 @@ async def ranked_matches_from_henrik(
             if raw_response["status"] != 200:
                 raise ValueError(raw_response)
             response_data = MmrResponseData.model_validate(raw_response["data"])
-            acts = ["e9a1", "e9a2", "e9a3", "e10a1"]
+            acts = ["e10a1", "e10a2"]
             act_dict: dict[str, ActInfo] = {
                 act.metadata.short: act_info
                 for act in response_data.seasonal
@@ -111,7 +110,7 @@ async def get_matches_info(http_session: ClientSession, riot_id: RiotId) -> Matc
     match ranked_matches.eligibility():
         case NotEligible():
             return (riot_id, NotEligible(), None)
-        case Episode9Eligibility() | Episode10Eligibility() as e:
+        case Episode10Eligibility() as e:
             return (riot_id, ranked_matches.eligibility(), e.peak)
 
 
